@@ -1,0 +1,50 @@
+
+CARLA bağlantısı OK
+Map: Carla/Maps/Town03
+Output dir: /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference
+
+
+[SPAWN POINTS] count=265
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_spawn_points.geojson
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_spawn_points.csv
+İlk 20 spawn point:
+  SP_000 x=220.41 y=-5.09 yaw=-179.1 road=5 lane=-2
+  SP_001 x=227.26 y=-1.59 yaw=-179.1 road=1156 lane=-1
+  SP_002 x=245.87 y=0.50 yaw=-88.6 road=1166 lane=3
+  SP_003 x=242.37 y=-10.08 yaw=-88.6 road=1166 lane=2
+  SP_004 x=234.77 y=3.55 yaw=91.4 road=1165 lane=-1
+  SP_005 x=231.27 y=14.27 yaw=91.4 road=1165 lane=-2
+  SP_006 x=-26.26 y=-7.96 yaw=143.1 road=1608 lane=-1
+  SP_007 x=-149.06 y=107.71 yaw=89.6 road=1679 lane=-1
+  SP_008 x=-145.56 y=99.70 yaw=-90.0 road=1678 lane=1
+  SP_009 x=-149.05 y=76.14 yaw=90.0 road=1909 lane=-1
+  SP_010 x=-145.54 y=52.83 yaw=-90.0 road=1908 lane=1
+  SP_011 x=-136.98 y=0.18 yaw=0.3 road=1853 lane=-1
+  SP_012 x=-149.01 y=5.16 yaw=90.0 road=1829 lane=-1
+  SP_013 x=-145.50 y=-8.41 yaw=-90.0 road=1828 lane=1
+  SP_014 x=107.90 y=62.56 yaw=-0.1 road=52 lane=1
+  SP_015 x=-9.26 y=155.71 yaw=89.6 road=31 lane=-2
+  SP_016 x=-5.76 y=161.59 yaw=89.6 road=1031 lane=-1
+  SP_017 x=2.18 y=159.54 yaw=-90.4 road=1030 lane=4
+  SP_018 x=5.68 y=153.82 yaw=-90.4 road=31 lane=5
+  SP_019 x=-13.93 y=168.73 yaw=168.9 road=1020 lane=-1
+
+[WAYPOINTS] step=10.0m count=1603
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_waypoints_10m.geojson
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_waypoints_10m.csv
+
+[TOPOLOGY] segments=503
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_topology.geojson
+
+[MISSION ORDER]
+  00 start        x=220.41 y=-5.19 z=0.20
+  01 gorev_1      x=82.60 y=-60.28 z=7.08
+  02 gorev_2      x=99.19 y=-191.51 z=0.20
+  03 park_giris   x=234.81 y=-145.41 z=0.20
+[ROUTE SEGMENT] start -> gorev_1 wp_count=89
+[ROUTE SEGMENT] gorev_1 -> gorev_2 wp_count=74
+[ROUTE SEGMENT] gorev_2 -> park_giris wp_count=91
+[MISSION ROUTE READY] wp_count=252 length_m=496.1
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_current_mission_route.geojson
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_current_mission_route.csv
+[SAVE] /home/ilker/Masaüstü/Autonomous-Driving-Perception-and-Decision-System/autonomous_driving/outputs/town03_map_reference/town03_map.opendrive.xodr

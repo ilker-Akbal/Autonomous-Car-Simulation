@@ -1,0 +1,11 @@
+{
+  "class_names": [
+    "green",
+    "red",
+    "unknown",
+    "yellow"
+  ],
+  "img_size": 128,
+  "best_val_acc": 1.0,
+  "best_path": "outputs/models/traffic_light_state_resnet18_carla/best.pt"
+}

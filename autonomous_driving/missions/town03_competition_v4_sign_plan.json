@@ -1,0 +1,448 @@
+{
+  "version": 2,
+  "planner": "town03_route_semantic_sign_plan",
+  "route_length_m": 496.056,
+  "semantic_mission_points": [
+    {
+      "name": "start",
+      "role": "start",
+      "distance_m": 0.0,
+      "xy_error_m": 0.0
+    },
+    {
+      "name": "gorev_1",
+      "role": "task",
+      "distance_m": 181.624,
+      "xy_error_m": 0.0
+    },
+    {
+      "name": "gorev_2",
+      "role": "task",
+      "distance_m": 329.406,
+      "xy_error_m": 0.0
+    },
+    {
+      "name": "park_giris",
+      "role": "parking",
+      "distance_m": 138.59,
+      "xy_error_m": 202.45
+    }
+  ],
+  "ignored_route_control_points": [
+    {
+      "name": "via_ana_yol_1",
+      "role": "control",
+      "x": 192.271,
+      "y": -2.109
+    },
+    {
+      "name": "via_ana_yol_2",
+      "role": "control",
+      "x": 172.273,
+      "y": -2.407
+    },
+    {
+      "name": "via_kavsak_oncesi",
+      "role": "control",
+      "x": 123.561,
+      "y": -6.635
+    },
+    {
+      "name": "via_sag_donus_hazirlik",
+      "role": "control",
+      "x": 105.563,
+      "y": -6.904
+    },
+    {
+      "name": "via_rampa_giris",
+      "role": "control",
+      "x": 81.093,
+      "y": -17.741
+    },
+    {
+      "name": "via_rampa_orta",
+      "role": "control",
+      "x": 81.588,
+      "y": -31.732
+    },
+    {
+      "name": "via_tunel_giris",
+      "role": "control",
+      "x": 83.454,
+      "y": -84.549
+    },
+    {
+      "name": "via_tunel_ici",
+      "role": "control",
+      "x": 84.443,
+      "y": -112.531
+    },
+    {
+      "name": "via_tunel_cikis",
+      "role": "control",
+      "x": 85.673,
+      "y": -147.34
+    },
+    {
+      "name": "via_tunel_sonrasi",
+      "role": "control",
+      "x": 86.189,
+      "y": -182.34
+    },
+    {
+      "name": "via_alt_yol_1",
+      "role": "control",
+      "x": 140.563,
+      "y": -190.471
+    },
+    {
+      "name": "via_alt_yol_2",
+      "role": "control",
+      "x": 166.21,
+      "y": -193.9
+    },
+    {
+      "name": "via_alt_yol_3",
+      "role": "control",
+      "x": 194.21,
+      "y": -193.9
+    },
+    {
+      "name": "via_sag_alt_donus",
+      "role": "control",
+      "x": 222.67,
+      "y": -182.302
+    },
+    {
+      "name": "via_sag_dikey_alt",
+      "role": "control",
+      "x": 234.428,
+      "y": -149.461
+    },
+    {
+      "name": "via_sag_dikey_orta",
+      "role": "control",
+      "x": 233.29,
+      "y": -68.753
+    },
+    {
+      "name": "via_sag_dikey_cikis",
+      "role": "control",
+      "x": 232.074,
+      "y": -18.767
+    },
+    {
+      "name": "via_ust_baglanti",
+      "role": "control",
+      "x": 226.736,
+      "y": 58.308
+    },
+    {
+      "name": "via_ust_yol_bati",
+      "role": "control",
+      "x": 190.396,
+      "y": 58.837
+    },
+    {
+      "name": "via_ada_yaklasim",
+      "role": "control",
+      "x": 106.356,
+      "y": 59.053
+    },
+    {
+      "name": "via_ada_cikis",
+      "role": "control",
+      "x": 101.951,
+      "y": 62.597
+    },
+    {
+      "name": "via_park_yaklasim",
+      "role": "control",
+      "x": 210.405,
+      "y": 62.286
+    },
+    {
+      "name": "via_park_koridor",
+      "role": "control",
+      "x": 229.658,
+      "y": 80.573
+    },
+    {
+      "name": "via_eski_park_gecisi",
+      "role": "control",
+      "x": 229.172,
+      "y": 100.567
+    },
+    {
+      "name": "via_final_uzatma_01",
+      "role": "control",
+      "x": 228.321,
+      "y": 135.557
+    },
+    {
+      "name": "via_final_uzatma_02",
+      "role": "control",
+      "x": 215.042,
+      "y": 170.697
+    },
+    {
+      "name": "via_final_uzatma_03",
+      "role": "control",
+      "x": 184.387,
+      "y": 188.309
+    },
+    {
+      "name": "via_final_uzatma_04",
+      "role": "control",
+      "x": 147.651,
+      "y": 193.163
+    },
+    {
+      "name": "via_final_uzatma_05",
+      "role": "control",
+      "x": 112.651,
+      "y": 193.25
+    },
+    {
+      "name": "via_final_uzatma_06",
+      "role": "control",
+      "x": 77.651,
+      "y": 193.337
+    },
+    {
+      "name": "via_final_uzatma_07",
+      "role": "control",
+      "x": 37.651,
+      "y": 193.437
+    },
+    {
+      "name": "via_final_uzatma_08",
+      "role": "control",
+      "x": -2.349,
+      "y": 193.537
+    },
+    {
+      "name": "via_final_uzatma_09",
+      "role": "control",
+      "x": -42.213,
+      "y": 193.633
+    },
+    {
+      "name": "via_final_uzatma_10",
+      "role": "control",
+      "x": -70.318,
+      "y": 175.076
+    },
+    {
+      "name": "via_final_uzatma_11",
+      "role": "control",
+      "x": -74.003,
+      "y": 140.582
+    }
+  ],
+  "parking_selection": {
+    "mode": "route_end_fallback",
+    "reason": "no_parking_candidate_close_enough_to_route_end",
+    "route_end_distance_m": 496.056,
+    "candidates": [
+      {
+        "name": "park_giris",
+        "distance_m": 138.59,
+        "xy_error_m": 202.45
+      }
+    ]
+  },
+  "turn_events": [
+    {
+      "key": "RIGHT",
+      "start_i": 56,
+      "end_i": 67,
+      "start_distance_m": 127.737,
+      "end_distance_m": 147.624,
+      "length_m": 19.887,
+      "road_id": 494,
+      "lane_id": -1,
+      "contains_junction": true
+    },
+    {
+      "key": "RIGHT",
+      "start_i": 151,
+      "end_i": 160,
+      "start_distance_m": 312.312,
+      "end_distance_m": 329.406,
+      "length_m": 17.094,
+      "road_id": 622,
+      "lane_id": 1,
+      "contains_junction": true
+    }
+  ],
+  "signs": [
+    {
+      "sign": "hiz_siniri_30",
+      "distance_m": 34.587,
+      "side": "R",
+      "reason": "route_start_speed_limit_after_initial_lane_change",
+      "source_event": "route_start",
+      "required": true,
+      "route_index": 13,
+      "route_x": 186.272,
+      "route_y": -2.198,
+      "route_yaw": -179.144,
+      "road_id": 6,
+      "lane_id": -1,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 34.0
+    },
+    {
+      "sign": "yol_ver",
+      "distance_m": 85.357,
+      "side": "R",
+      "reason": "yield_before_right_turn",
+      "source_event": "turn_right_127.7m",
+      "required": false,
+      "route_index": 38,
+      "route_x": 135.507,
+      "route_y": -2.956,
+      "route_yaw": -179.144,
+      "road_id": 7,
+      "lane_id": -1,
+      "road_option": "STRAIGHT",
+      "is_junction": false,
+      "target_distance_m": 79.737
+    },
+    {
+      "sign": "ileriden_saga_mecburi_yon",
+      "distance_m": 103.857,
+      "side": "R",
+      "reason": "mandatory_direction_before_right_turn",
+      "source_event": "turn_right_127.7m",
+      "required": true,
+      "route_index": 44,
+      "route_x": 117.562,
+      "route_y": -6.725,
+      "route_yaw": -179.144,
+      "road_id": 7,
+      "lane_id": -2,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 101.737
+    },
+    {
+      "sign": "dur",
+      "distance_m": 159.624,
+      "side": "R",
+      "reason": "stop_before_real_mission_point_gorev_1",
+      "source_event": "mission_gorev_1",
+      "required": false,
+      "route_index": 74,
+      "route_x": 81.517,
+      "route_y": -29.733,
+      "route_yaw": 272.024,
+      "road_id": 43,
+      "lane_id": 1,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 159.624
+    },
+    {
+      "sign": "hiz_siniri_20",
+      "distance_m": 216.474,
+      "side": "R",
+      "reason": "slow_zone_after_first_real_mission_point",
+      "source_event": "after_gorev_1",
+      "required": false,
+      "route_index": 102,
+      "route_x": 83.525,
+      "route_y": -86.548,
+      "route_yaw": 272.024,
+      "road_id": 42,
+      "lane_id": 1,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 215.624
+    },
+    {
+      "sign": "yol_ver",
+      "distance_m": 277.304,
+      "side": "R",
+      "reason": "yield_before_right_turn",
+      "source_event": "turn_right_312.3m",
+      "required": false,
+      "route_index": 132,
+      "route_x": 85.673,
+      "route_y": -147.34,
+      "route_yaw": 272.024,
+      "road_id": 41,
+      "lane_id": 1,
+      "road_option": "STRAIGHT",
+      "is_junction": false,
+      "target_distance_m": 264.312
+    },
+    {
+      "sign": "ileriden_saga_mecburi_yon",
+      "distance_m": 295.351,
+      "side": "R",
+      "reason": "mandatory_direction_before_right_turn",
+      "source_event": "turn_right_312.3m",
+      "required": true,
+      "route_index": 142,
+      "route_x": 86.134,
+      "route_y": -165.38,
+      "route_yaw": 270.504,
+      "road_id": 41,
+      "lane_id": 1,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 286.312
+    },
+    {
+      "sign": "park_etmek_yasaktir",
+      "distance_m": 424.963,
+      "side": "L",
+      "reason": "no_parking_zone_before_parking_entry",
+      "source_event": "parking_route_end",
+      "required": false,
+      "route_index": 209,
+      "route_x": 192.21,
+      "route_y": -193.9,
+      "route_yaw": -0.0,
+      "road_id": 65,
+      "lane_id": -2,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 424.056
+    },
+    {
+      "sign": "park_yeri",
+      "distance_m": 462.127,
+      "side": "R",
+      "reason": "parking_entry_sign_before_parking_target",
+      "source_event": "parking_route_end",
+      "required": true,
+      "route_index": 232,
+      "route_x": 224.452,
+      "route_y": -179.766,
+      "route_yaw": 57.842,
+      "road_id": 65,
+      "lane_id": -2,
+      "road_option": "LANEFOLLOW",
+      "is_junction": false,
+      "target_distance_m": 462.056
+    }
+  ],
+  "skipped": [],
+  "omitted_by_design": [
+    {
+      "sign": "dur",
+      "mission_point": "gorev_2",
+      "mission_distance_m": 329.406,
+      "reason": "task_is_inside_or_immediately_after_turn_context",
+      "near_turn": {
+        "direction": "RIGHT",
+        "start_distance_m": 312.312,
+        "end_distance_m": 329.406
+      }
+    }
+  ]
+}

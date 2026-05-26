@@ -1,0 +1,212 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_001",
+        "sign": "hiz_siniri_30",
+        "distance_m": 34.587,
+        "side": "R",
+        "reason": "route_start_speed_limit_after_initial_lane_change",
+        "source_event": "route_start",
+        "required": true,
+        "road_id": 6,
+        "lane_id": -1,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          186.272,
+          -2.198,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_002",
+        "sign": "yol_ver",
+        "distance_m": 85.357,
+        "side": "R",
+        "reason": "yield_before_right_turn",
+        "source_event": "turn_right_127.7m",
+        "required": false,
+        "road_id": 7,
+        "lane_id": -1,
+        "road_option": "STRAIGHT"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          135.507,
+          -2.956,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_003",
+        "sign": "ileriden_saga_mecburi_yon",
+        "distance_m": 103.857,
+        "side": "R",
+        "reason": "mandatory_direction_before_right_turn",
+        "source_event": "turn_right_127.7m",
+        "required": true,
+        "road_id": 7,
+        "lane_id": -2,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          117.562,
+          -6.725,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_004",
+        "sign": "dur",
+        "distance_m": 159.624,
+        "side": "R",
+        "reason": "stop_before_real_mission_point_gorev_1",
+        "source_event": "mission_gorev_1",
+        "required": false,
+        "road_id": 43,
+        "lane_id": 1,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          81.517,
+          -29.733,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_005",
+        "sign": "hiz_siniri_20",
+        "distance_m": 216.474,
+        "side": "R",
+        "reason": "slow_zone_after_first_real_mission_point",
+        "source_event": "after_gorev_1",
+        "required": false,
+        "road_id": 42,
+        "lane_id": 1,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          83.525,
+          -86.548,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_006",
+        "sign": "yol_ver",
+        "distance_m": 277.304,
+        "side": "R",
+        "reason": "yield_before_right_turn",
+        "source_event": "turn_right_312.3m",
+        "required": false,
+        "road_id": 41,
+        "lane_id": 1,
+        "road_option": "STRAIGHT"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.673,
+          -147.34,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_007",
+        "sign": "ileriden_saga_mecburi_yon",
+        "distance_m": 295.351,
+        "side": "R",
+        "reason": "mandatory_direction_before_right_turn",
+        "source_event": "turn_right_312.3m",
+        "required": true,
+        "road_id": 41,
+        "lane_id": 1,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          86.134,
+          -165.38,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_008",
+        "sign": "park_etmek_yasaktir",
+        "distance_m": 424.963,
+        "side": "L",
+        "reason": "no_parking_zone_before_parking_entry",
+        "source_event": "parking_route_end",
+        "required": false,
+        "road_id": 65,
+        "lane_id": -2,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          192.21,
+          -193.9,
+          0.0
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "SIGN_009",
+        "sign": "park_yeri",
+        "distance_m": 462.127,
+        "side": "R",
+        "reason": "parking_entry_sign_before_parking_target",
+        "source_event": "parking_route_end",
+        "required": true,
+        "road_id": 65,
+        "lane_id": -2,
+        "road_option": "LANEFOLLOW"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          224.452,
+          -179.766,
+          0.0
+        ]
+      }
+    }
+  ]
+}

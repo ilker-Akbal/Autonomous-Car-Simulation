@@ -1,0 +1,10 @@
+path: autonomous_driving_project/outputs/prepared_data/bdd_yolo
+
+train: images/train
+val: images/val
+
+names:
+  0: car
+  1: traffic sign
+  2: traffic light
+  3: person

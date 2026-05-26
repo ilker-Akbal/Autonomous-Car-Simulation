@@ -1,0 +1,653 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "start",
+        "description": "Araç başlangıç konumu",
+        "nokta_id": 0,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 220.4112091064453,
+        "carla_y": -5.188553810119629,
+        "carla_z": 0.2,
+        "carla_yaw": -179.14419555664062,
+        "road_id": 5,
+        "lane_id": -2,
+        "kind": "start"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          220.4112091064453,
+          -5.188553810119629
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_ana_yol_1",
+        "description": "Başlangıç sonrası düz ana yol güvenli geçiş",
+        "nokta_id": 1,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 192.2710876464844,
+        "carla_y": -2.1085095405578613,
+        "carla_z": 0.2,
+        "carla_yaw": -179.14419555664062,
+        "road_id": 6,
+        "lane_id": -1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          192.2710876464844,
+          -2.1085095405578613
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_ana_yol_2",
+        "description": "Ana yol orta geçiş",
+        "nokta_id": 2,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 172.2733154296875,
+        "carla_y": -2.4072279930114746,
+        "carla_z": 0.2,
+        "carla_yaw": -179.14419555664062,
+        "road_id": 6,
+        "lane_id": -1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          172.2733154296875,
+          -2.4072279930114746
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_kavsak_oncesi",
+        "description": "Sağ dönüş öncesi güvenli yaklaşım",
+        "nokta_id": 3,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 123.56104278564452,
+        "carla_y": -6.635262489318848,
+        "carla_z": 0.3,
+        "carla_yaw": -179.14419555664062,
+        "road_id": 7,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          123.56104278564452,
+          -6.635262489318848
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_sag_donus_hazirlik",
+        "description": "Tünel rampasına sağ dönüş hazırlığı",
+        "nokta_id": 4,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 105.56304168701172,
+        "carla_y": -6.904109001159668,
+        "carla_z": 0.35,
+        "carla_yaw": -179.14419555664062,
+        "road_id": 7,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          105.56304168701172,
+          -6.904109001159668
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_rampa_giris",
+        "description": "Tünel rampası girişine dönüş sonrası şerit merkezi",
+        "nokta_id": 5,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 81.09306335449219,
+        "carla_y": -17.74062156677246,
+        "carla_z": 0.75,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 43,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          81.09306335449219,
+          -17.74062156677246
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_rampa_orta",
+        "description": "Tünel rampası orta güvenli geçiş",
+        "nokta_id": 6,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 81.5875473022461,
+        "carla_y": -31.73188591003418,
+        "carla_z": 2.35,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 43,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          81.5875473022461,
+          -31.73188591003418
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_1",
+        "description": "1. yolcu alma/bindirme noktası - tünel rampası üzerinde güvenli duruş",
+        "nokta_id": 7,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 82.29395294189453,
+        "carla_y": -51.71940994262695,
+        "carla_z": 5.7,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 43,
+        "lane_id": 1,
+        "kind": "task"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.29395294189453,
+          -51.71940994262695
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_giris",
+        "description": "Tünel/alt geçit giriş geçiş noktası",
+        "nokta_id": 8,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 83.4542236328125,
+        "carla_y": -84.54890441894531,
+        "carla_z": 8.2,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 42,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          83.4542236328125,
+          -84.54890441894531
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_ici",
+        "description": "Tünel/alt geçit iç geçiş noktası",
+        "nokta_id": 9,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 84.44319152832031,
+        "carla_y": -112.53143310546876,
+        "carla_z": 8.2,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 42,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          84.44319152832031,
+          -112.53143310546876
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_cikis",
+        "description": "Tünel/alt geçit çıkış geçiş noktası",
+        "nokta_id": 10,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 85.67339324951172,
+        "carla_y": -147.33970642089844,
+        "carla_z": 7.85,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 41,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.67339324951172,
+          -147.33970642089844
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_sonrasi",
+        "description": "Tünel sonrası alt kavşak yaklaşımı",
+        "nokta_id": 11,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 86.18910217285156,
+        "carla_y": -182.3401641845703,
+        "carla_z": 0.2,
+        "carla_yaw": 270.153564453125,
+        "road_id": 622,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          86.18910217285156,
+          -182.3401641845703
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_2",
+        "description": "2. yolcu indirme/bindirme noktası",
+        "nokta_id": 12,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 97.16707611083984,
+        "carla_y": -191.56126403808597,
+        "carla_z": 0.2,
+        "carla_yaw": 1.4395599365234375,
+        "road_id": 0,
+        "lane_id": 3,
+        "kind": "task"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          97.16707611083984,
+          -191.56126403808597
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_alt_yol_1",
+        "description": "Gorev 2 sonrası alt yol geçişi",
+        "nokta_id": 13,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 140.56336975097656,
+        "carla_y": -190.470703125,
+        "carla_z": 0.2,
+        "carla_yaw": -358.5604248046875,
+        "road_id": 499,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          140.56336975097656,
+          -190.470703125
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_alt_yol_2",
+        "description": "Alt yoldan sağ dış koridora bağlantı",
+        "nokta_id": 14,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 166.20999145507812,
+        "carla_y": -193.8999938964844,
+        "carla_z": 0.2,
+        "carla_yaw": 0.0,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          166.20999145507812,
+          -193.8999938964844
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_alt_yol_3",
+        "description": "Sağ dış koridor alt geçiş",
+        "nokta_id": 15,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 194.20999145507807,
+        "carla_y": -193.8999938964844,
+        "carla_z": 0.2,
+        "carla_yaw": 0.0,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          194.20999145507807,
+          -193.8999938964844
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_sag_alt_donus",
+        "description": "Sağ dış koridora kıvrım",
+        "nokta_id": 16,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 222.66978454589844,
+        "carla_y": -182.30245971679688,
+        "carla_z": 0.2,
+        "carla_yaw": 51.96099853515625,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          222.66978454589844,
+          -182.30245971679688
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_sag_dikey_alt",
+        "description": "Sağ dış dikey koridor alt noktası",
+        "nokta_id": 17,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 234.4283905029297,
+        "carla_y": -149.46102905273438,
+        "carla_z": 0.2,
+        "carla_yaw": 83.21815490722656,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          234.4283905029297,
+          -149.46102905273438
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_sag_dikey_orta",
+        "description": "Sağ dış dikey koridor orta noktası",
+        "nokta_id": 18,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 233.289993,
+        "carla_y": -68.752533,
+        "carla_z": 0.2,
+        "carla_yaw": 91.393204,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          233.289993,
+          -68.752533
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_sag_dikey_cikis",
+        "description": "Sağ dış dikey koridor üst çıkış",
+        "nokta_id": 19,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 232.07431,
+        "carla_y": -18.767311,
+        "carla_z": 0.2,
+        "carla_yaw": 91.393204,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          232.07431,
+          -18.767311
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_ust_baglanti",
+        "description": "Üst bağlantı yoluna dönüş",
+        "nokta_id": 20,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 226.735794,
+        "carla_y": 58.308392,
+        "carla_z": 0.2,
+        "carla_yaw": -200.934891,
+        "road_id": 1374,
+        "lane_id": -1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          226.735794,
+          58.308392
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_ust_yol_bati",
+        "description": "Üst yol batı geçişi",
+        "nokta_id": 21,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 190.395645,
+        "carla_y": 58.837189,
+        "carla_z": 0.2,
+        "carla_yaw": 179.852585,
+        "road_id": 47,
+        "lane_id": -1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          190.395645,
+          58.837189
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_ada_yaklasim",
+        "description": "Ada/roundabout yaklaşım noktası",
+        "nokta_id": 22,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 106.355919,
+        "carla_y": 59.053391,
+        "carla_z": 0.2,
+        "carla_yaw": 179.852585,
+        "road_id": 52,
+        "lane_id": -1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          106.355919,
+          59.053391
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_ada_cikis",
+        "description": "Ada/roundabout çıkış noktası",
+        "nokta_id": 23,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 101.950836,
+        "carla_y": 62.597466,
+        "carla_z": 0.2,
+        "carla_yaw": -2.593783,
+        "road_id": 1435,
+        "lane_id": -1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          101.950836,
+          62.597466
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_park_yaklasim",
+        "description": "Park bölgesi yaklaşım koridoru",
+        "nokta_id": 24,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 210.404572,
+        "carla_y": 62.285721,
+        "carla_z": 0.2,
+        "carla_yaw": 359.8526,
+        "road_id": 47,
+        "lane_id": 1,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          210.404572,
+          62.285721
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_park_koridor",
+        "description": "Park girişi öncesi sağ üst koridor",
+        "nokta_id": 25,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 229.658249,
+        "carla_y": 80.573303,
+        "carla_z": 0.3,
+        "carla_yaw": 91.393204,
+        "road_id": 67,
+        "lane_id": -2,
+        "kind": "via"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          229.658249,
+          80.573303
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "park_giris",
+        "description": "Final park bölgesi giriş noktası",
+        "nokta_id": 26,
+        "yaw": 0.0,
+        "town": "Town03",
+        "carla_x": 229.171982,
+        "carla_y": 100.56739,
+        "carla_z": 0.55,
+        "carla_yaw": 91.393204,
+        "road_id": 67,
+        "lane_id": -2,
+        "kind": "park"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          229.171982,
+          100.56739
+        ]
+      }
+    }
+  ]
+}

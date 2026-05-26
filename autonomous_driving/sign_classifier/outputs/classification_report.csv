@@ -1,0 +1,21 @@
+,precision,recall,f1-score,support
+dikkat,1.0,1.0,1.0,20.0
+dur,1.0,1.0,1.0,77.0
+duraklamak_park_yasaktir,1.0,1.0,1.0,20.0
+girisi_olmayan_yol,1.0,1.0,1.0,38.0
+hiz_siniri_20,1.0,1.0,1.0,20.0
+hiz_siniri_30,1.0,1.0,1.0,26.0
+hiz_siniri_40,1.0,1.0,1.0,20.0
+hiz_siniri_50,1.0,1.0,1.0,26.0
+isikli_isaret_cihazi,1.0,1.0,1.0,38.0
+okul_gecidi,1.0,1.0,1.0,89.0
+park_etmek_yasaktir,1.0,1.0,1.0,20.0
+saga_donulmez,1.0,1.0,1.0,83.0
+sola_donulmez,1.0,1.0,1.0,78.0
+tasit_giremez,1.0,1.0,1.0,56.0
+yaya_gecidi,1.0,1.0,1.0,26.0
+yol_calismasi,1.0,1.0,1.0,20.0
+yol_ver,1.0,1.0,1.0,20.0
+accuracy,1.0,1.0,1.0,1.0
+macro avg,1.0,1.0,1.0,677.0
+weighted avg,1.0,1.0,1.0,677.0

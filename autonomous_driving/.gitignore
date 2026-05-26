@@ -1,0 +1,26 @@
+
+*.bag
+build/
+*.db3
+debug_logs/
+# generated archives
+# generated folders
+*.gz
+.idea/
+install/
+# local base weights
+# local/debug outputs
+# local IDE/cache
+log/
+outputs/predictions/
+*.pyc
+__pycache__/
+*.pyo
+runs/
+*.tar
+_trash_review/
+.vscode/
+yolo26n.pt
+yolov8n.pt
+*.zip
+*.bak*

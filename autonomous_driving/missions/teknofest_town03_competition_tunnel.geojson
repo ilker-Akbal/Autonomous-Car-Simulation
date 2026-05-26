@@ -1,0 +1,187 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "start",
+        "description": "Araç başlangıç konumu",
+        "nokta_id": 0,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 0,
+        "carla_x": 220.4112091064453,
+        "carla_y": -5.188554763793945,
+        "carla_z": 0.2,
+        "carla_yaw": -179.14419555664062,
+        "road_id": 5,
+        "lane_id": -2,
+        "kind": "start",
+        "route_distance_m": 0.0
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          220.4112091064453,
+          -5.188554763793945
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_1",
+        "description": "1. yolcu alma/bindirme noktası - tünel yaklaşımı öncesi güvenli duruş",
+        "nokta_id": 1,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 89,
+        "carla_x": 82.59648895263672,
+        "carla_y": -60.27952575683594,
+        "carla_z": 7.083895874023438,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 43,
+        "lane_id": 1,
+        "kind": "task",
+        "route_distance_m": 191.6
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.59648895263672,
+          -60.27952575683594
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_giris",
+        "description": "Tünel/alt-geçit bonus rotası giriş zorunlu geçiş noktası",
+        "nokta_id": 2,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 100,
+        "carla_x": 83.4542236328125,
+        "carla_y": -84.54890441894531,
+        "carla_z": 8.2,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 42,
+        "lane_id": 1,
+        "kind": "via",
+        "route_distance_m": 214.5
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          83.4542236328125,
+          -84.54890441894531
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_ici",
+        "description": "Tünel/alt-geçit bonus rotası iç geçiş noktası",
+        "nokta_id": 3,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 115,
+        "carla_x": 84.44319152832031,
+        "carla_y": -112.53143310546876,
+        "carla_z": 8.2,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 42,
+        "lane_id": 1,
+        "kind": "via",
+        "route_distance_m": 242.5
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          84.44319152832031,
+          -112.53143310546876
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "via_tunel_cikis",
+        "description": "Tünel/alt-geçit bonus rotası çıkış zorunlu geçiş noktası",
+        "nokta_id": 4,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 134,
+        "carla_x": 85.74403381347656,
+        "carla_y": -149.3384552001953,
+        "carla_z": 7.574879837036133,
+        "carla_yaw": 272.02410888671875,
+        "road_id": 41,
+        "lane_id": 1,
+        "kind": "via",
+        "route_distance_m": 279.3
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.74403381347656,
+          -149.3384552001953
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_2",
+        "description": "2. yolcu indirme/bindirme noktası",
+        "nokta_id": 5,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 160,
+        "carla_x": 99.19493865966797,
+        "carla_y": -191.5102996826172,
+        "carla_z": 0.2,
+        "carla_yaw": 1.4395599365234375,
+        "road_id": 0,
+        "lane_id": 3,
+        "kind": "task",
+        "route_distance_m": 329.4
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          99.19493865966797,
+          -191.5102996826172
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "park_giris",
+        "description": "Araç otopark giriş bölgesi noktası",
+        "nokta_id": 6,
+        "yaw": 0.0,
+        "town": "Town03",
+        "route_index": 250,
+        "carla_x": 234.80738830566406,
+        "carla_y": -145.409912109375,
+        "carla_z": 0.2,
+        "carla_yaw": 86.09255981445312,
+        "road_id": 65,
+        "lane_id": -2,
+        "kind": "park",
+        "route_distance_m": 494.3
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          234.80738830566406,
+          -145.409912109375
+        ]
+      }
+    }
+  ]
+}

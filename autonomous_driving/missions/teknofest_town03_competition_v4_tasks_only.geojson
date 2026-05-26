@@ -1,0 +1,110 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "start",
+        "description": "Araç başlangıç konumu",
+        "nokta_id": 0,
+        "town": "Town03",
+        "carla_x": 220.4112091064453,
+        "carla_y": -5.188553810119629,
+        "carla_z": 0.2,
+        "carla_yaw": -179.14419555664062,
+        "kind": "start"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          220.4112091064453,
+          -5.188553810119629
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_1",
+        "description": "1. yolcu alma/indirme noktası - tünel/rampa kritik bölgesi",
+        "nokta_id": 1,
+        "town": "Town03",
+        "carla_x": 82.29395294189453,
+        "carla_y": -51.71940994262695,
+        "carla_z": 5.7,
+        "carla_yaw": 272.02410888671875,
+        "kind": "task"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          82.29395294189453,
+          -51.71940994262695
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_2",
+        "description": "2. yolcu alma/indirme noktası - tünel sonrası alt bölge",
+        "nokta_id": 2,
+        "town": "Town03",
+        "carla_x": 97.16707611083984,
+        "carla_y": -191.56126403808597,
+        "carla_z": 0.2,
+        "carla_yaw": 1.4395599365234375,
+        "kind": "task"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          97.16707611083984,
+          -191.56126403808597
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "gorev_3",
+        "description": "3. yolcu alma/indirme noktası - final uzatma sonrası kritik bölge",
+        "nokta_id": 3,
+        "town": "Town03",
+        "carla_x": -70.3178482055664,
+        "carla_y": 175.076171875,
+        "carla_z": 0.2,
+        "carla_yaw": 243.08056640625,
+        "kind": "task"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -70.3178482055664,
+          175.076171875
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "park_giris",
+        "description": "Park bölgesi giriş noktası",
+        "nokta_id": 4,
+        "town": "Town03",
+        "carla_x": -74.48495483398438,
+        "carla_y": 149.8595428466797,
+        "carla_z": 0.2,
+        "carla_yaw": -91.32583618164062,
+        "kind": "park"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -74.48495483398438,
+          149.8595428466797
+        ]
+      }
+    }
+  ]
+}

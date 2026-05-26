@@ -1,0 +1,34 @@
+# ROS2 / colcon
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Runtime outputs
+autonomous_driving/outputs/teknofest_sim_logs/
+*.log
+
+# Archives / temporary
+*.tar.gz
+*.zip
+*.bak
+*.orig
+*.rej
+*.diff
+*.patch
+
+# Large model files - Git LFS kullanılacaksa ayrıca track edilir
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Editors
+.vscode/
+.idea/
+.DS_Store

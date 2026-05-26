@@ -1,0 +1,185 @@
+{
+  "maps": [],
+  "props": [
+    {
+      "name": "teknofest_sign_dur",
+      "size": "small",
+      "source": "./Props/teknofest_sign_dur/teknofest_sign_dur.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_yol_ver",
+      "size": "small",
+      "source": "./Props/teknofest_sign_yol_ver/teknofest_sign_yol_ver.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_girisi_olmayan_yol",
+      "size": "small",
+      "source": "./Props/teknofest_sign_girisi_olmayan_yol/teknofest_sign_girisi_olmayan_yol.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_saga_donulmez",
+      "size": "small",
+      "source": "./Props/teknofest_sign_saga_donulmez/teknofest_sign_saga_donulmez.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_sola_donulmez",
+      "size": "small",
+      "source": "./Props/teknofest_sign_sola_donulmez/teknofest_sign_sola_donulmez.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_park_yeri",
+      "size": "small",
+      "source": "./Props/teknofest_sign_park_yeri/teknofest_sign_park_yeri.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_park_etmek_yasaktir",
+      "size": "small",
+      "source": "./Props/teknofest_sign_park_etmek_yasaktir/teknofest_sign_park_etmek_yasaktir.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_yaya_gecidi",
+      "size": "small",
+      "source": "./Props/teknofest_sign_yaya_gecidi/teknofest_sign_yaya_gecidi.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_isikli_isaret_cihazi",
+      "size": "small",
+      "source": "./Props/teknofest_sign_isikli_isaret_cihazi/teknofest_sign_isikli_isaret_cihazi.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_hiz_siniri_20",
+      "size": "small",
+      "source": "./Props/teknofest_sign_hiz_siniri_20/teknofest_sign_hiz_siniri_20.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_hiz_siniri_30",
+      "size": "small",
+      "source": "./Props/teknofest_sign_hiz_siniri_30/teknofest_sign_hiz_siniri_30.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_hiz_siniri_40",
+      "size": "small",
+      "source": "./Props/teknofest_sign_hiz_siniri_40/teknofest_sign_hiz_siniri_40.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_hiz_siniri_50",
+      "size": "small",
+      "source": "./Props/teknofest_sign_hiz_siniri_50/teknofest_sign_hiz_siniri_50.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_sagdan_gidiniz",
+      "size": "small",
+      "source": "./Props/teknofest_sign_sagdan_gidiniz/teknofest_sign_sagdan_gidiniz.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_soldan_gidiniz",
+      "size": "small",
+      "source": "./Props/teknofest_sign_soldan_gidiniz/teknofest_sign_soldan_gidiniz.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_saga_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_saga_mecburi_yon/teknofest_sign_saga_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_sola_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_sola_mecburi_yon/teknofest_sign_sola_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_ileri_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_ileri_mecburi_yon/teknofest_sign_ileri_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_ileri_ve_saga_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_ileri_ve_saga_mecburi_yon/teknofest_sign_ileri_ve_saga_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_ileri_ve_sola_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_ileri_ve_sola_mecburi_yon/teknofest_sign_ileri_ve_sola_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_ileriden_saga_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_ileriden_saga_mecburi_yon/teknofest_sign_ileriden_saga_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_ileriden_sola_mecburi_yon",
+      "size": "small",
+      "source": "./Props/teknofest_sign_ileriden_sola_mecburi_yon/teknofest_sign_ileriden_sola_mecburi_yon.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_serit_duzenleme_levhasi_sag",
+      "size": "small",
+      "source": "./Props/teknofest_sign_serit_duzenleme_levhasi_sag/teknofest_sign_serit_duzenleme_levhasi_sag.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_serit_duzenleme_levhasi_sol",
+      "size": "small",
+      "source": "./Props/teknofest_sign_serit_duzenleme_levhasi_sol/teknofest_sign_serit_duzenleme_levhasi_sol.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_ada_etrafinda_donunuz",
+      "size": "small",
+      "source": "./Props/teknofest_sign_ada_etrafinda_donunuz/teknofest_sign_ada_etrafinda_donunuz.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_iki_yonlu_yol",
+      "size": "small",
+      "source": "./Props/teknofest_sign_iki_yonlu_yol/teknofest_sign_iki_yonlu_yol.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_tunel",
+      "size": "small",
+      "source": "./Props/teknofest_sign_tunel/teknofest_sign_tunel.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_dikkat",
+      "size": "small",
+      "source": "./Props/teknofest_sign_dikkat/teknofest_sign_dikkat.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_okul_gecidi",
+      "size": "small",
+      "source": "./Props/teknofest_sign_okul_gecidi/teknofest_sign_okul_gecidi.fbx",
+      "tag": "TrafficSign"
+    },
+    {
+      "name": "teknofest_sign_yol_calismasi",
+      "size": "small",
+      "source": "./Props/teknofest_sign_yol_calismasi/teknofest_sign_yol_calismasi.fbx",
+      "tag": "TrafficSign"
+    }
+  ]
+}

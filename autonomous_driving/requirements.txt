@@ -1,0 +1,14 @@
+numpy
+opencv-python
+matplotlib
+pyyaml
+jupyter
+ipykernel
+pandas
+scipy
+pillow
+tqdm
+ultralytics
+torch
+torchvision
+torchaudio
