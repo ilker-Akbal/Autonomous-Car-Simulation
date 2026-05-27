@@ -255,9 +255,9 @@ class TrafficLightPipeline:
         min_det_conf = _env_float("TL_SIMPLE_MIN_DET_CONF", 0.04)
         min_state_conf = _env_float("TL_SIMPLE_ACTIVE_STATE_CONF", 0.30)
 
-        red_min_area_ratio = _env_float("TL_ACTIVE_RED_MIN_AREA_RATIO", 0.00045)
-        red_min_width_ratio = _env_float("TL_ACTIVE_RED_MIN_WIDTH_RATIO", 0.0060)
-        red_min_height_ratio = _env_float("TL_ACTIVE_RED_MIN_HEIGHT_RATIO", 0.045)
+        red_min_area_ratio = _env_float("TL_ACTIVE_RED_MIN_AREA_RATIO", 0.00012)
+        red_min_width_ratio = _env_float("TL_ACTIVE_RED_MIN_WIDTH_RATIO", 0.0045)
+        red_min_height_ratio = _env_float("TL_ACTIVE_RED_MIN_HEIGHT_RATIO", 0.018)
 
         green_min_area_ratio = _env_float("TL_ACTIVE_GREEN_MIN_AREA_RATIO", 0.00012)
         green_min_width_ratio = _env_float("TL_ACTIVE_GREEN_MIN_WIDTH_RATIO", 0.0045)
@@ -376,11 +376,11 @@ class TrafficLightPipeline:
             # Aynı ROI içinde kırmızı/sarı, yeşile göre daha güvenli tarafta kalmalı.
             # Yanlış yeşile GO demek, kırmızıyı kaçırmaktan daha tehlikeli.
             if state == "red":
-                state_priority = _env_float("TL_ACTIVE_RED_PRIORITY", 0.88)
+                state_priority = 1.00
             elif state == "yellow":
-                state_priority = _env_float("TL_ACTIVE_YELLOW_PRIORITY", 0.78)
+                state_priority = 0.82
             else:
-                state_priority = _env_float("TL_ACTIVE_GREEN_PRIORITY", 0.70)
+                state_priority = 0.62
 
             distance_score = 0.5
             if dist_m > 0.0:

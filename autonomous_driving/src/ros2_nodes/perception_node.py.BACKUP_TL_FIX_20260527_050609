@@ -105,13 +105,6 @@ class PerceptionNode(Node):
         self.declare_parameter("lidar_front_abs_y", 2.0)
         self.declare_parameter("lidar_min_z", -2.0)
         self.declare_parameter("lidar_max_z", 3.0)
-
-        # TL_FIX:
-        # Sensör frame'i eskiyse mesafe kullanma.
-        # Trafik ışığı bbox-depth mesafesi varsayılan olarak kapalıdır.
-        self.declare_parameter("sensor_fusion_max_age_s", env_float("SENSOR_FUSION_MAX_AGE_S", 0.35))
-        self.declare_parameter("traffic_light_use_depth_distance", env_bool("TRAFFIC_LIGHT_USE_DEPTH_DISTANCE", False))
-
         self.declare_parameter("annotated_topic", "/adas/perception/annotated_image")
 
         self.declare_parameter(
@@ -235,9 +228,7 @@ class PerceptionNode(Node):
         self.depth_topic = self.get_parameter("depth_topic").value
         self.lidar_topic = self.get_parameter("lidar_topic").value
         self.latest_depth = None
-        self.latest_depth_time = 0.0
         self.latest_lidar_front_m = None
-        self.latest_lidar_front_time = 0.0
         self.model_path = resolve_runtime_path(self.model_path, "MODEL_PATH")
         self.tl_state_model_path = resolve_runtime_path(self.tl_state_model_path, "TRAFFIC_LIGHT_STATE_MODEL_PATH")
         self.sign_classifier_model_path = resolve_runtime_path(self.sign_classifier_model_path, "SIGN_CLASSIFIER_MODEL_PATH")
@@ -796,15 +787,7 @@ class PerceptionNode(Node):
             "green": 0,
         }
 
-        # TL_GREEN_FIX:
-        # YOLO bazen sadece yanan ampulü veya çok küçük traffic-light bbox'u veriyor.
-        # Eski eşikler 10x18/180 area altını direkt unknown yapıyordu;
-        # bu yüzden HSV, modelin yanlış "red" tahminini düzeltemiyordu.
-        min_w = env_int("TL_HSV_MIN_WIDTH", 4)
-        min_h = env_int("TL_HSV_MIN_HEIGHT", 4)
-        min_area = env_int("TL_HSV_MIN_AREA", 20)
-
-        if bw < min_w or bh < min_h or area < min_area:
+        if bw < 10 or bh < 18 or area < 180:
             return "unknown", scores, f"too_small:bw={bw},bh={bh},area={area}"
 
         crop = frame[y1:y2, x1:x2]
@@ -839,33 +822,6 @@ class PerceptionNode(Node):
             (s >= 60) &
             (v >= 80)
         )
-
-        # TL_GREEN_FIX:
-        # Eğer bbox tüm sinyal gövdesini değil sadece yanan ampulü kapsıyorsa
-        # "üst=red / orta=yellow / alt=green" bölge varsayımı yanlış olur.
-        # Bu durumda tüm crop üzerindeki baskın rengi kullan.
-        if env_bool("TL_HSV_COMPACT_ENABLED", True):
-            global_scores = {
-                "red": int(red_mask.sum()),
-                "yellow": int(yellow_mask.sum()),
-                "green": int(green_mask.sum()),
-            }
-
-            best_color = max(global_scores, key=global_scores.get)
-            best_score = int(global_scores.get(best_color, 0))
-            ordered = sorted(global_scores.values(), reverse=True)
-            second_score = int(ordered[1]) if len(ordered) > 1 else 0
-
-            min_pixels = env_int("TL_HSV_COMPACT_MIN_PIXELS", 18)
-            dominance = env_float("TL_HSV_COMPACT_DOMINANCE_RATIO", 1.35)
-
-            if best_score >= min_pixels and (
-                second_score <= 0 or best_score >= float(second_score) * dominance
-            ):
-                return best_color, global_scores, (
-                    f"compact_hsv_ok:{best_color}:"
-                    f"score={best_score},second={second_score},scores={global_scores}"
-                )
 
         H = crop.shape[0]
 
@@ -1768,7 +1724,6 @@ class PerceptionNode(Node):
         try:
             depth = np.frombuffer(msg.data, dtype=np.float32).reshape((msg.height, msg.width))
             self.latest_depth = depth.copy()
-            self.latest_depth_time = time.time()
         except Exception as e:
             self.get_logger().warn(f"Depth parse hata: {e}")
 
@@ -1820,7 +1775,6 @@ class PerceptionNode(Node):
                 return
 
             self.latest_lidar_front_m = float(np.percentile(front_x, 5.0))
-            self.latest_lidar_front_time = time.time()
 
         except Exception as e:
             self.get_logger().warn(f"LiDAR parse hata: {e}")
@@ -1894,17 +1848,6 @@ class PerceptionNode(Node):
         Merkez tek nokta yerine bbox içinden geçerli depth değerlerini topluyoruz.
         """
         if self.latest_depth is None:
-            return None
-
-        # TL_FIX:
-        # Eski depth frame'i karar mesafesi olarak kullanılmasın.
-        try:
-            max_age = float(self.get_parameter("sensor_fusion_max_age_s").value)
-            if float(getattr(self, "latest_depth_time", 0.0) or 0.0) <= 0.0:
-                return None
-            if time.time() - float(self.latest_depth_time) > max_age:
-                return None
-        except Exception:
             return None
 
         try:
@@ -2001,10 +1944,7 @@ class PerceptionNode(Node):
             bbox = self._extract_bbox_for_fusion(det)
             depth_m = None
 
-            is_traffic_light = str(det.get("label", "")).strip() == "traffic_light"
-            use_tl_depth = bool(self.get_parameter("traffic_light_use_depth_distance").value)
-
-            if bbox is not None and ((not is_traffic_light) or use_tl_depth):
+            if bbox is not None:
                 depth_m = self._depth_distance_for_bbox(bbox, image_w, image_h)
 
             if depth_m is not None:
@@ -2012,18 +1952,7 @@ class PerceptionNode(Node):
                 det["distance_est"] = round(float(depth_m), 3)
                 det["distance_source"] = "zed_depth"
             else:
-                if str(det.get("label", "")).strip() == "traffic_light" and not bool(self.get_parameter("traffic_light_use_depth_distance").value):
-                    det["distance_source"] = "tl_depth_disabled"
-                else:
-                    det["distance_source"] = det.get("distance_source", "none")
-
-            if self.latest_lidar_front_m is not None:
-                try:
-                    max_age = float(self.get_parameter("sensor_fusion_max_age_s").value)
-                    if time.time() - float(getattr(self, "latest_lidar_front_time", 0.0) or 0.0) > max_age:
-                        self.latest_lidar_front_m = None
-                except Exception:
-                    self.latest_lidar_front_m = None
+                det["distance_source"] = det.get("distance_source", "none")
 
             if self.latest_lidar_front_m is not None:
                 det["front_lidar_obstacle_m"] = round(float(self.latest_lidar_front_m), 3)

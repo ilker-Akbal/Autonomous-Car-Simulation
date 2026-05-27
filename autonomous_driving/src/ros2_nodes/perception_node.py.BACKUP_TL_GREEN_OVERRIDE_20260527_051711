@@ -796,15 +796,7 @@ class PerceptionNode(Node):
             "green": 0,
         }
 
-        # TL_GREEN_FIX:
-        # YOLO bazen sadece yanan ampulü veya çok küçük traffic-light bbox'u veriyor.
-        # Eski eşikler 10x18/180 area altını direkt unknown yapıyordu;
-        # bu yüzden HSV, modelin yanlış "red" tahminini düzeltemiyordu.
-        min_w = env_int("TL_HSV_MIN_WIDTH", 4)
-        min_h = env_int("TL_HSV_MIN_HEIGHT", 4)
-        min_area = env_int("TL_HSV_MIN_AREA", 20)
-
-        if bw < min_w or bh < min_h or area < min_area:
+        if bw < 10 or bh < 18 or area < 180:
             return "unknown", scores, f"too_small:bw={bw},bh={bh},area={area}"
 
         crop = frame[y1:y2, x1:x2]
@@ -839,33 +831,6 @@ class PerceptionNode(Node):
             (s >= 60) &
             (v >= 80)
         )
-
-        # TL_GREEN_FIX:
-        # Eğer bbox tüm sinyal gövdesini değil sadece yanan ampulü kapsıyorsa
-        # "üst=red / orta=yellow / alt=green" bölge varsayımı yanlış olur.
-        # Bu durumda tüm crop üzerindeki baskın rengi kullan.
-        if env_bool("TL_HSV_COMPACT_ENABLED", True):
-            global_scores = {
-                "red": int(red_mask.sum()),
-                "yellow": int(yellow_mask.sum()),
-                "green": int(green_mask.sum()),
-            }
-
-            best_color = max(global_scores, key=global_scores.get)
-            best_score = int(global_scores.get(best_color, 0))
-            ordered = sorted(global_scores.values(), reverse=True)
-            second_score = int(ordered[1]) if len(ordered) > 1 else 0
-
-            min_pixels = env_int("TL_HSV_COMPACT_MIN_PIXELS", 18)
-            dominance = env_float("TL_HSV_COMPACT_DOMINANCE_RATIO", 1.35)
-
-            if best_score >= min_pixels and (
-                second_score <= 0 or best_score >= float(second_score) * dominance
-            ):
-                return best_color, global_scores, (
-                    f"compact_hsv_ok:{best_color}:"
-                    f"score={best_score},second={second_score},scores={global_scores}"
-                )
 
         H = crop.shape[0]
 

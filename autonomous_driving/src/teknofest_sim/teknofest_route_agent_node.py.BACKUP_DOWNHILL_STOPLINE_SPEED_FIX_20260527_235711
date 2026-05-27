@@ -672,7 +672,6 @@ class TeknofestRouteAgentNode(Node):
 
     def nearest_manual_tl_stopline(self):
         lines = getattr(self, "manual_tl_stoplines", []) or []
-        self._last_manual_tl_candidates_debug = ""
         if not lines:
             return None
 
@@ -691,11 +690,9 @@ class TeknofestRouteAgentNode(Node):
         except Exception:
             return None
 
-        try:
-            front_x, front_y = self.get_ego_front_xy()
-        except Exception:
-            front_x, front_y = float(ego_loc.x), float(ego_loc.y)
+        front_x, front_y = self.get_ego_front_xy()
 
+        ego_wp = None
         try:
             ego_wp = self.map.get_waypoint(
                 ego_loc,
@@ -707,183 +704,100 @@ class TeknofestRouteAgentNode(Node):
 
         ego_road = getattr(ego_wp, "road_id", None) if ego_wp is not None else None
         ego_lane = getattr(ego_wp, "lane_id", None) if ego_wp is not None else None
+        ego_section = getattr(ego_wp, "section_id", None) if ego_wp is not None else None
 
-        candidates = []
-
-        def _angle_diff(a, b):
-            try:
-                return abs(self.angle_norm_deg(float(a) - float(b)))
-            except Exception:
-                d = (float(a) - float(b) + 180.0) % 360.0 - 180.0
-                return abs(d)
+        best = None
 
         for line in lines:
             line_map = str(line.get("map", "") or "").split("/")[-1]
             if line_map and map_name and line_map != map_name:
                 continue
 
-            try:
-                lx = float(line["x"])
-                ly = float(line["y"])
-            except Exception:
-                continue
+            lx = float(line["x"])
+            ly = float(line["y"])
 
             dx = lx - front_x
             dy = ly - front_y
 
-            # Kritik değişiklik:
-            # Stopline yaw yerine aracın anlık yönüne göre mesafe çıkar.
-            # Yokuş/kavşaklarda stopline yaw ile eşleşme çok kolay kaçıyor.
+            # Aracın kendi yönüne göre boyuna/enine mesafe.
+            # Eski kod stopline yaw'una göre bakıyordu; bu kavşakta sık kaçıyor.
             longitudinal_m = dx * float(fwd.x) + dy * float(fwd.y)
             lateral_m = dx * float(right.x) + dy * float(right.y)
 
-            release_after = float(line.get("release_after_pass_m", 4.0))
-            approach_m = float(line.get("approach_m", 120.0))
+            release_after = float(line.get("release_after_pass_m", 3.0))
+            approach_m = float(line.get("approach_m", 80.0))
 
-            # STOP_2M_BEFORE_LINE_FIX:
-            # Negatif longitudinal_m, ön tamponun bu stopline'ı geçtiği anlamına gelir.
-            # Bu çizgiyi yeni hard-stop sebebi yaparsak araç çizgiyi geçtikten sonra frenler.
-            if longitudinal_m < 0.30:
+            if longitudinal_m < -release_after:
                 continue
             if longitudinal_m > approach_m:
                 continue
 
-            yaw_diff = _angle_diff(line.get("yaw_deg", 0.0), ego_yaw)
-
             line_road = line.get("road_id", None)
             line_lane = line.get("lane_id", None)
+            line_section = line.get("section_id", None)
 
-            same_lane = False
+            same_lane = (
+                ego_road is not None
+                and ego_lane is not None
+                and line_road is not None
+                and line_lane is not None
+                and int(line_road) == int(ego_road)
+                and int(line_lane) == int(ego_lane)
+            )
+
+            # Aynı şeritteyse daha toleranslı, değilse daha sıkı davran.
+            lateral_limit = float(line.get("lateral_half_width_m", 4.2))
+            if same_lane:
+                lateral_limit = max(lateral_limit, 5.0)
+
+            if abs(lateral_m) > lateral_limit:
+                continue
+
+            # Aynı şerit değilse, stopline yönü ego yönüne çok ters düşüyorsa ele.
+            yaw_diff = 0.0
             try:
-                same_lane = (
-                    ego_road is not None
-                    and ego_lane is not None
-                    and line_road is not None
-                    and line_lane is not None
-                    and int(line_road) == int(ego_road)
-                    and int(line_lane) == int(ego_lane)
-                )
+                yaw_diff = abs(self.angle_norm_deg(float(line.get("yaw_deg", 0.0)) - ego_yaw))
             except Exception:
-                same_lane = False
+                yaw_diff = 0.0
 
-            candidates.append({
-                "line": line,
-                "dist": float(longitudinal_m),
-                "lat": float(lateral_m),
-                "yaw_diff": float(yaw_diff),
-                "same_lane": bool(same_lane),
-            })
+            if not same_lane and yaw_diff > 80.0:
+                continue
 
-        if not candidates:
-            self._last_manual_tl_candidates_debug = "none_in_front"
+            # Skor: aynı şerit büyük avantaj, sonra lateral yakınlık, sonra mesafe.
+            score = abs(lateral_m) + max(0.0, longitudinal_m) * 0.025 + yaw_diff * 0.005
+            if same_lane:
+                score -= 5.0
+
+            if best is None or score < best[0]:
+                best = (score, line, longitudinal_m, lateral_m)
+
+        if best is None:
             return None
 
-        # Debug için en yakın adayları sakla.
-        try:
-            tops = sorted(
-                candidates,
-                key=lambda c: abs(c["lat"]) + 0.03 * max(0.0, c["dist"]) + 0.003 * c["yaw_diff"]
-            )[:5]
-            self._last_manual_tl_candidates_debug = ";".join(
-                f"{str(c['line'].get('id','?'))}:d={c['dist']:.1f},lat={c['lat']:.1f},yaw={c['yaw_diff']:.0f},same={int(c['same_lane'])}"
-                for c in tops
-            )
-        except Exception:
-            self._last_manual_tl_candidates_debug = "debug_failed"
-
-        # PASS-1: sıkı eşleşme.
-        strict = []
-        for c in candidates:
-            lat_limit = float(c["line"].get("lateral_half_width_m", 6.0))
-            if c["same_lane"]:
-                lat_limit = max(lat_limit, 6.5)
-
-            if abs(c["lat"]) <= lat_limit and (c["same_lane"] or c["yaw_diff"] <= 95.0):
-                score = abs(c["lat"]) + c["dist"] * 0.020 + c["yaw_diff"] * 0.004
-                if c["same_lane"]:
-                    score -= 7.0
-                strict.append((score, c))
-
-        if strict:
-            _, c = min(strict, key=lambda x: x[0])
-            return c["line"], c["dist"], c["lat"]
-
-        # PASS-2:
-        # Yokuş ve kavşakta road/lane/yaw şaşabiliyor.
-        # Önde, enine makul yakın stopline'ı fallback kabul et.
-        loose = []
-        for c in candidates:
-            if abs(c["lat"]) <= 12.0 and c["yaw_diff"] <= 150.0:
-                score = abs(c["lat"]) + c["dist"] * 0.030 + c["yaw_diff"] * 0.002
-                loose.append((score, c))
-
-        if loose:
-            _, c = min(loose, key=lambda x: x[0])
-            return c["line"], c["dist"], c["lat"]
-
-        # PASS-3: yokuş/kavşak acil yakın stopline fallback.
-        # CARLA stop waypoint yaw/road/lane bazen kavşakta 90/180 derece ve same_lane=0 geliyor.
-        # Logda gerçek yakın adaylar lat=12.9/13.0 ile kaçıyordu.
-        # Çok yakındaki stopline'ı, yaw'a bakmadan kabul et; aksi halde visual hard-stop geç kalıyor.
-        emergency = []
-        for c in candidates:
-            d = float(c["dist"])
-            lat = abs(float(c["lat"]))
-            if 0.0 <= d <= 18.0 and lat <= 16.0:
-                # Yakın mesafeyi lateralden daha önemli yap.
-                score = d * 0.60 + lat * 0.40
-                emergency.append((score, c))
-
-        if emergency:
-            _, c = min(emergency, key=lambda x: x[0])
-            return c["line"], c["dist"], c["lat"]
-
-        return None
-
+        _, line, longitudinal_m, lateral_m = best
+        return line, float(longitudinal_m), float(lateral_m)
 
     def apply_manual_tl_stopline_cap(self, target_speed, reason):
         if not getattr(self, "manual_tl_stoplines_enabled", False):
             return target_speed, reason
 
+        # Görev durağını ezme. Yolcu durağı trafik ışığı değildir.
         stage = str(self.get_stage() or "")
         if stage == "PASSENGER_STOP":
             return target_speed, reason
 
-        reason_l = str(reason or "").lower()
-        current_red_yellow = (
-            "red_light" in reason_l
-            or "yellow_light" in reason_l
-            or "traffic_light_red" in reason_l
-            or "traffic_light_yellow" in reason_l
-        )
-
-        if not self.manual_tl_red_active() and not current_red_yellow:
+        if not self.manual_tl_red_active():
             return target_speed, reason
 
         hit = self.nearest_manual_tl_stopline()
         if hit is None:
-            dbg = str(getattr(self, "_last_manual_tl_candidates_debug", "") or "no_debug")
-            return target_speed, f"{reason}|manual_tl_stopline_no_match:{dbg}"
+            return target_speed, reason
 
         line, dist_m, lat_m = hit
         line_id = str(line.get("id", "manual_stopline"))
 
-        # STOP_2M_BEFORE_LINE_FIX:
-        # dist_m = ön tampondan CARLA stop waypoint'e kalan mesafe.
-        # İstenen davranış: çizginin üstünde değil, çizgiden 2m önce dur.
-        stop_before_m = float(line.get("stop_before_m", 2.00))
-        control_dist_m = float(dist_m) - stop_before_m
-
-        # Bu satıra normalde düşmemeli çünkü nearest negatifleri eleyecek.
-        # Yine de güvenlik için: geçmiş çizgiyi yeni hold sebebi yapma.
-        if dist_m < 0.30:
-            return target_speed, (
-                f"{reason}|manual_tl_stopline_passed_ignore:"
-                f"id={line_id},line_dist={dist_m:.2f},lat={lat_m:.2f}"
-            )
-
-        stop_margin = 0.15
-        crawl_m_base = float(line.get("crawl_m", 14.0))
+        stop_margin = float(line.get("stop_margin_m", 1.50))
+        crawl_m = float(line.get("crawl_m", 10.0))
         crawl_speed = float(line.get("crawl_speed_mps", 1.10))
         approach_speed = float(line.get("approach_speed_mps", 4.00))
 
@@ -892,28 +806,12 @@ class TeknofestRouteAgentNode(Node):
         except Exception:
             base_speed = 0.0
 
-        try:
-            current_speed = float(self.get_speed())
-        except Exception:
-            current_speed = 0.0
+        reason_l = str(reason or "").lower()
 
-        v = max(0.0, current_speed)
-
-        comfortable_decel = 2.35
-        reaction_s = 0.75
-        brake_distance = (v * v) / max(0.1, 2.0 * comfortable_decel)
-        brake_distance += reaction_s * v
-        brake_distance += 4.0
-
-        try:
-            pitch = float(self.ego.get_transform().rotation.pitch)
-            if abs(pitch) >= 2.5:
-                brake_distance += 4.0
-        except Exception:
-            pass
-
-        dynamic_crawl_m = max(crawl_m_base, brake_distance)
-
+        # MANUAL_STOPLINE_CAP_ZERO_FIX:
+        # Decision red_light_no_sensor_overhead_stop ile 0 m/s veriyor.
+        # Ama stopline hâlâ 20m ilerideyse bu 0'ı kullanırsak araç çok geride durur.
+        # Stopline varsa yaklaşım/crawl aşamasında visual STOP'u override ediyoruz.
         visual_red_stop_zero = (
             base_speed <= 0.05
             and (
@@ -921,46 +819,36 @@ class TeknofestRouteAgentNode(Node):
                 or "red_light_no_sensor_stop" in reason_l
                 or "red_light_visual_forced_stop" in reason_l
                 or "driver_only_decision_stop:red_light" in reason_l
-                or "red_light_no_sensor_crawl_visual" in reason_l
             )
         )
 
         def choose_speed(limit_speed):
+            # Normalde mevcut target hız limitin altındaysa onu koru.
+            # Ama mevcut target 0, visual kırmızı STOP'tan geldiyse
+            # stopline'a kadar kontrollü yaklaşmak için limit_speed kullan.
             if visual_red_stop_zero:
                 return float(limit_speed)
             if base_speed > 0.05:
                 return min(base_speed, float(limit_speed))
             return float(limit_speed)
 
-        # Artık STOP kararı line_dist değil, control_dist üzerinden.
-        # control_dist <= 0: çizgiden 2m önceki hedefe geldik.
-        emergency_stop_m = max(stop_margin, min(6.0, 1.0 + 0.45 * v))
-
-        if control_dist_m <= max(stop_margin, emergency_stop_m):
+        if dist_m <= stop_margin:
             return 0.0, (
                 f"{reason}|red_light_manual_tl_stopline_stop:"
-                f"id={line_id},line_dist={dist_m:.2f},control_dist={control_dist_m:.2f},"
-                f"stop_before={stop_before_m:.2f},lat={lat_m:.2f},v={v:.2f}"
+                f"id={line_id},dist={dist_m:.2f},lat={lat_m:.2f},margin={stop_margin:.2f}"
             )
 
-        if control_dist_m <= dynamic_crawl_m:
+        if dist_m <= crawl_m:
             capped = choose_speed(crawl_speed)
-            if control_dist_m <= 5.0:
-                capped = min(capped, 0.65)
-
             return capped, (
                 f"{reason}|red_light_manual_tl_stopline_crawl:"
-                f"id={line_id},line_dist={dist_m:.2f},control_dist={control_dist_m:.2f},"
-                f"stop_before={stop_before_m:.2f},lat={lat_m:.2f},cap={capped:.2f},"
-                f"v={v:.2f},brake_dist={brake_distance:.1f}"
+                f"id={line_id},dist={dist_m:.2f},lat={lat_m:.2f},cap={capped:.2f}"
             )
 
         capped = choose_speed(approach_speed)
         return capped, (
             f"{reason}|red_light_manual_tl_stopline_approach:"
-            f"id={line_id},line_dist={dist_m:.2f},control_dist={control_dist_m:.2f},"
-            f"stop_before={stop_before_m:.2f},lat={lat_m:.2f},cap={capped:.2f},"
-            f"v={v:.2f},brake_dist={brake_distance:.1f}"
+            f"id={line_id},dist={dist_m:.2f},lat={lat_m:.2f},cap={capped:.2f}"
         )
 
 
@@ -983,160 +871,6 @@ class TeknofestRouteAgentNode(Node):
         # confirmed green gelmeden aracı tekrar yürütme.
         now = time.time()
         reason_l = str(reason or "").lower()
-
-        # UPCOMING_TL_UNCERTAIN_STOPLINE_PRECAP_FIX:
-        # Yokuşta kırmızı/yellow çok geç gelebiliyor. Eğer confirmed green yoksa
-        # ve önde manual stopline varsa 30 km/h ile kavşağa dalma.
-        try:
-            latest_decision = getattr(self, "latest_decision", {}) or {}
-            latest_state = str(latest_decision.get("traffic_light_state", "") or "").lower()
-            latest_reason = str(latest_decision.get("reason", "") or "").lower()
-
-            confirmed_green_now = (
-                "green_light_confirmed_stable" in reason_l
-                or "green_light_confirmed_stable" in latest_reason
-            )
-
-            has_current_red_yellow = (
-                "red_light" in reason_l
-                or "yellow_light" in reason_l
-                or "traffic_light_red" in reason_l
-                or "traffic_light_yellow" in reason_l
-            )
-
-            # Sadece belirsiz durumda pre-cap. Red/yellow varsa manual stopline bloğu zaten yönetecek.
-            if (
-                not confirmed_green_now
-                and not has_current_red_yellow
-                and float(target_speed or 0.0) > 4.05
-                and latest_state not in {"red", "yellow"}
-            ):
-                hit = self.nearest_manual_tl_stopline()
-                if hit is not None:
-                    line, dist_m, lat_m = hit
-                    stop_before_m = float(line.get("stop_before_m", 2.0))
-                    control_dist_m = float(dist_m) - stop_before_m
-
-                    try:
-                        v = float(self.get_speed())
-                    except Exception:
-                        v = 0.0
-
-                    if 0.0 < control_dist_m <= 55.0:
-                        cap = 4.0
-                        if control_dist_m <= 28.0:
-                            cap = 3.0
-                        if control_dist_m <= 16.0:
-                            cap = 2.2
-                        if control_dist_m <= 8.0:
-                            cap = 1.2
-
-                        target_speed = min(float(target_speed or 0.0), cap)
-                        reason = (
-                            f"{reason}|upcoming_tl_uncertain_stopline_precap:"
-                            f"id={str(line.get('id','?'))},line_dist={float(dist_m):.2f},"
-                            f"control_dist={control_dist_m:.2f},stop_before={stop_before_m:.2f},"
-                            f"lat={float(lat_m):.2f},cap={target_speed:.2f},v={v:.2f}"
-                        )
-                        reason_l = str(reason or "").lower()
-        except Exception as exc:
-            try:
-                self.get_logger().warning(f"upcoming TL uncertain pre-cap failed: {exc}")
-            except Exception:
-                pass
-
-        # GREEN_WAIT_NO_RED_HOLD_FIX:
-        # green_wait_stable sadece kırmızıdan dolayı TL hold aktifse aracı bekletmeli.
-        # Araç hareket halindeyken/hold yokken yeşil bekleme kararı full STOP'a çevrilirse
-        # yokuşta ve düz yolda gereksiz 1 saniyelik dur-kalk yapıyor.
-        tl_hold_active_now = (
-            bool(getattr(self, "tl_stop_hold_active", False))
-            and now < float(getattr(self, "tl_stop_hold_until", 0.0) or 0.0)
-        )
-
-        if (
-            ("green_wait_stable" in reason_l or "decision_hold_after_stop:green_wait_stable" in reason_l)
-            and not tl_hold_active_now
-        ):
-            self.tl_stop_hold_active = False
-            self.tl_stop_hold_until = 0.0
-            self.last_brake_cmd = 0.0
-
-            # Yeşil henüz confirmed değilse durma değil, kontrollü devam.
-            # Yokuşta gereksiz full brake yapmasın ama hız da sınırsız kalmasın.
-            return 4.0, f"{reason}|green_wait_no_red_hold_ignore"
-
-        # DOWNHILL_WEAK_GREEN_STOPLINE_PRECAUTION_FIX:
-        # Yokuşta bazen ilgili kırmızı geç/yanlış algılanıyor; önümüzde manual stopline
-        # varsa ve ışık henüz confirmed green değilse tam hızla dalma, kontrollü yaklaş.
-        try:
-            latest_decision = getattr(self, "latest_decision", {}) or {}
-            latest_state = str(latest_decision.get("traffic_light_state", "") or "").lower()
-            latest_reason = str(latest_decision.get("reason", "") or "").lower()
-
-            confirmed_green = (
-                "green_light_confirmed_stable" in reason_l
-                or "green_light_confirmed_stable" in latest_reason
-            )
-
-            weak_or_unconfirmed_green = (
-                latest_state == "green"
-                and not confirmed_green
-                and not tl_hold_active_now
-            )
-
-            if weak_or_unconfirmed_green:
-                hit = self.nearest_manual_tl_stopline()
-                if hit is not None:
-                    line, dist_m, lat_m = hit
-
-                    try:
-                        v = float(self.get_speed())
-                    except Exception:
-                        v = 0.0
-
-                    # Dinamik fren mesafesi. v=8 m/s için yaklaşık 22-25m bandı.
-                    decel = 2.35
-                    reaction_s = 0.75
-                    brake_dist = (v * v) / max(0.1, 2.0 * decel)
-                    brake_dist += reaction_s * v
-                    brake_dist += 5.0
-
-                    try:
-                        pitch = float(self.ego.get_transform().rotation.pitch)
-                        if abs(pitch) >= 2.5:
-                            brake_dist += 4.0
-                    except Exception:
-                        pass
-
-                    # Stopline yaklaşıyorsa ama yeşil henüz confirmed değilse,
-                    # full stop değil, güvenli yaklaşma.
-                    if 0.0 < float(dist_m) <= max(22.0, brake_dist):
-                        cap = 4.0
-                        if float(dist_m) <= 12.0:
-                            cap = 2.2
-                        if float(dist_m) <= 6.0:
-                            cap = 1.2
-
-                        try:
-                            current_target = float(target_speed or 0.0)
-                        except Exception:
-                            current_target = 0.0
-
-                        if current_target > 0.05:
-                            cap = min(current_target, cap)
-
-                        return cap, (
-                            f"{reason}|weak_green_stopline_precaution:"
-                            f"id={str(line.get('id','?'))},dist={float(dist_m):.2f},"
-                            f"lat={float(lat_m):.2f},cap={cap:.2f},v={v:.2f},brake_dist={brake_dist:.1f}"
-                        )
-
-        except Exception as exc:
-            try:
-                self.get_logger().warning(f"weak green stopline precaution failed: {exc}")
-            except Exception:
-                pass
 
         # GREEN_RELEASE_POST_IGNORE_FIX:
         # Confirmed green ile kalktıktan sonra aynı kavşağın eski red/yellow'u aracı
@@ -1167,17 +901,14 @@ class TeknofestRouteAgentNode(Node):
             return max(float(target_speed or 0.0), 2.0), f"{reason}|post_green_same_intersection_tl_ignore"
 
         # TL_CARLA_STOPLINE_PRIORITY_FIX:
-        # CARLA/manual stopline varsa bbox'a göre erken/geç hard-stop yapma.
+        # CARLA/manual stopline varsa bbox'a göre erken hard-stop yapma.
         # Önce dünya koordinatındaki stopline'a yaklaş/crawl/stop uygula.
         try:
-            current_red_yellow_for_stopline = (
-                "red_light" in reason_l
-                or "yellow_light" in reason_l
-                or "traffic_light_red" in reason_l
-                or "traffic_light_yellow" in reason_l
-            )
+            manual_hit = None
+            if self.manual_tl_red_active():
+                manual_hit = self.nearest_manual_tl_stopline()
 
-            if self.manual_tl_red_active() or current_red_yellow_for_stopline:
+            if manual_hit is not None:
                 target_speed, reason = self.apply_manual_tl_stopline_cap(target_speed, reason)
                 reason_s = str(reason)
 
@@ -1359,23 +1090,6 @@ class TeknofestRouteAgentNode(Node):
 
     def apply_target_speed_smoothing(self, target_speed, reason):
         target_speed = float(target_speed)
-        reason_s = str(reason or "")
-        reason_l = reason_s.lower()
-
-        # TL_STOPLINE_NO_UPWARD_TARGET_SMOOTH_FIX:
-        # Stopline / weak-green önlemi düşük hız cap'i verdiyse smoothing bunu yukarı çekemez.
-        # Önceki logda weak_green_stopline_precaution cap=2.20 iken target_smooth 7.28'e çekmişti.
-        tl_stopline_hard_cap_active = (
-            "red_light_manual_tl_stopline_" in reason_l
-            or "weak_green_stopline_precaution" in reason_l
-            or "skip_visual_bbox_stop:manual_stopline_active" in reason_l
-            or "upcoming_tl_uncertain_stopline_precap" in reason_l
-        )
-
-        if tl_stopline_hard_cap_active:
-            self.last_smoothed_target_speed_mps = target_speed
-            self.last_smoothed_target_time = time.time()
-            return target_speed, f"{reason}|target_smooth_bypass_for_tl_stopline:{target_speed:.2f}"
 
         if not self.target_speed_smoothing_enabled:
             self.last_smoothed_target_speed_mps = target_speed
@@ -1398,15 +1112,8 @@ class TeknofestRouteAgentNode(Node):
         dt = self.clamp(dt, 0.02, 0.20)
         prev = float(self.last_smoothed_target_speed_mps)
 
-        if (
-            ("green_light_detected" in reason_l or "green_light_confirmed_stable" in reason_l)
-            and prev <= 0.05
-            and target_speed > 0.10
-        ):
-            kickoff = min(
-                target_speed,
-                max(float(self.green_release_min_start_speed_mps), target_speed * 0.35),
-            )
+        if ("green_light_detected" in str(reason) or "green_light_confirmed_stable" in str(reason)) and prev <= 0.05 and target_speed > 0.10:
+            kickoff = min(target_speed, max(float(self.green_release_min_start_speed_mps), target_speed * 0.35))
             self.last_smoothed_target_speed_mps = kickoff
             self.last_smoothed_target_time = now
             reason = f"{reason}|green_release_smoothing_bypass:{kickoff:.2f}"
@@ -1426,7 +1133,6 @@ class TeknofestRouteAgentNode(Node):
             reason = f"{reason}|target_smooth:{target_speed:.2f}->{smoothed:.2f}"
 
         return smoothed, reason
-
 
     def get_stage(self):
         if not self.latest_mission:

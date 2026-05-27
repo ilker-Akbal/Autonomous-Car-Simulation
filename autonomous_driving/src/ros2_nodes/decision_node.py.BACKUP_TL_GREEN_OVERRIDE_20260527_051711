@@ -104,13 +104,13 @@ class DecisionNode(Node):
         # Kırmızı bir kere görüldüyse unknown frame'lerde GO'ya düşme.
         # Net yeşil gelene kadar veya latch süresi dolana kadar STOP kal.
         self.declare_parameter("red_light_latch_enabled", True)
-        self.declare_parameter("red_light_latch_seconds", 3.0)
-        self.declare_parameter("red_light_min_green_release_count", 1)
+        self.declare_parameter("red_light_latch_seconds", 4.5)
+        self.declare_parameter("red_light_min_green_release_count", 2)
         self.declare_parameter("yellow_as_slow", True)
         self.declare_parameter("tl_green_release_min_det_conf", 0.12)
         self.declare_parameter("tl_green_release_min_state_conf", 0.60)
-        self.declare_parameter("tl_green_release_min_area_ratio", 0.00030)
-        self.declare_parameter("tl_green_release_min_height_ratio", 0.035)
+        self.declare_parameter("tl_green_release_min_area_ratio", 0.00012)
+        self.declare_parameter("tl_green_release_min_height_ratio", 0.018)
         self.declare_parameter("tl_green_release_max_distance_m", 60.0)
         self.declare_parameter("tl_green_release_min_count", 2)
         self.declare_parameter("tl_red_stop_distance_m", 12.0)
@@ -118,12 +118,12 @@ class DecisionNode(Node):
         self.declare_parameter("tl_red_slow_distance_m", 24.0)
         self.declare_parameter("tl_red_stop_offset_m", 3.0)
         self.declare_parameter("tl_red_no_distance_stop_bottom_ratio", 0.54)
-        self.declare_parameter("tl_red_no_distance_stop_height_ratio", 0.045)
-        self.declare_parameter("tl_red_no_distance_stop_area_ratio", 0.00045)
+        self.declare_parameter("tl_red_no_distance_stop_height_ratio", 0.025)
+        self.declare_parameter("tl_red_no_distance_stop_area_ratio", 0.00018)
         self.declare_parameter("tl_red_distance_memory_seconds", 6.0)
         self.declare_parameter("tl_red_distance_outlier_jump_m", 18.0)
         self.declare_parameter("tl_red_distance_far_outlier_m", 55.0)
-        self.declare_parameter("tl_red_far_approach_speed_kmh", 8.0)
+        self.declare_parameter("tl_red_far_approach_speed_kmh", 20.0)
         self.declare_parameter("tl_red_memory_decay_mps", 4.2)
         self.declare_parameter("tl_red_raw_stall_epsilon_m", 0.70)
         # Trafik ışığı final kararı decision_node içindedir.
@@ -1555,32 +1555,20 @@ class DecisionNode(Node):
             # Logdaki ihlal örneği:
             #   b=0.083,h=0.083,a=0.001207,d=-1,src=none
             # Eski kod bunu red_light_no_sensor_crawl_visual yapıp 4 km/h ile geçirdi.
-            # TL_STOPLINE_FIX:
-            # Sensör/stopline mesafesi yokken overhead ışıkta bbox aşağı inmiyor;
-            # ışık üstte kalıyor ama bbox yavaş büyüyor. Eski eşikler logdaki
-            # h=0.064,a=0.00076 değerinde çok erken STOP veriyordu.
             no_sensor_overhead_or_near_stop = (
                 (
                     height_ratio is not None
                     and area_ratio is not None
-                    and height_ratio >= 0.088
-                    and area_ratio >= 0.00125
+                    and height_ratio >= 0.060
+                    and area_ratio >= 0.00070
                 )
                 or (
                     height_ratio is not None
-                    and area_ratio is not None
-                    and bottom_ratio is not None
-                    and bottom_ratio <= 0.18
-                    and height_ratio >= 0.082
-                    and area_ratio >= 0.00110
-                )
-                or (
-                    height_ratio is not None
-                    and height_ratio >= 0.110
+                    and height_ratio >= 0.074
                 )
                 or (
                     area_ratio is not None
-                    and area_ratio >= 0.00190
+                    and area_ratio >= 0.00100
                 )
             )
 
