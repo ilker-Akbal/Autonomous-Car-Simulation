@@ -24,6 +24,11 @@ from cv_bridge import CvBridge
 from ultralytics import YOLO
 
 from ros2_nodes.perception_tl_pipeline import TrafficLightPipeline
+from teknofest_sim.sign_semantics import (
+    build_decision_event_from_detection,
+    build_route_constraint_from_detection,
+    build_traffic_light_decision_event,
+)
 
 
 def env_float(name, default):
@@ -87,6 +92,8 @@ class PerceptionNode(Node):
 
         self.declare_parameter("image_topic", os.environ.get("IMAGE_TOPIC", "/adas/camera/front/image_raw"))
         self.declare_parameter("detections_topic", "/adas/perception/detections_json")
+        self.declare_parameter("decision_events_topic", "/adas/perception/decision_events_json")
+        self.declare_parameter("route_constraints_topic", "/adas/perception/route_constraints_json")
         self.declare_parameter("depth_topic", "/zed/zed_node/depth/depth_registered")
         self.declare_parameter("lidar_topic", "/adas/lidar/points")
         self.declare_parameter("depth_lidar_fusion_enabled", True)
@@ -168,6 +175,8 @@ class PerceptionNode(Node):
 
         self.image_topic = self.get_parameter("image_topic").value
         self.detections_topic = self.get_parameter("detections_topic").value
+        self.decision_events_topic = self.get_parameter("decision_events_topic").value
+        self.route_constraints_topic = self.get_parameter("route_constraints_topic").value
         self.annotated_topic = self.get_parameter("annotated_topic").value
         self.model_path = self.get_parameter("model_path").value
 
@@ -263,6 +272,12 @@ class PerceptionNode(Node):
         # Trafik ışığı kararını tek geçişli, state mutate etmeyen ayrı pipeline verir.
         self.tl_pipeline = TrafficLightPipeline(self)
 
+        # Route sign temporal filter:
+        # Tek frame yanlış mecburi yön / dönülmez levhası rotayı kirletmesin.
+        self.route_constraint_confirm_frames = env_int("ROUTE_SIGN_CONFIRM_FRAMES", 2)
+        self.route_constraint_memory_seconds = env_float("ROUTE_SIGN_MEMORY_SECONDS", 1.0)
+        self.route_constraint_memory = {}
+
         self.window_name = "ADAS PERCEPTION DEBUG"
 
         self.sub = self.create_subscription(Image, self.image_topic, self.image_callback, qos_profile_sensor_data, )
@@ -287,6 +302,18 @@ class PerceptionNode(Node):
             10,
         )
 
+        self.decision_events_pub = self.create_publisher(
+            String,
+            self.decision_events_topic,
+            10,
+        )
+
+        self.route_constraints_pub = self.create_publisher(
+            String,
+            self.route_constraints_topic,
+            10,
+        )
+
         self.annotated_pub = self.create_publisher(
             Image,
             self.annotated_topic,
@@ -301,6 +328,8 @@ class PerceptionNode(Node):
         self.get_logger().info(f"YOLO class names={self.model.names}")
         self.get_logger().info(f"image_topic={self.image_topic}")
         self.get_logger().info(f"detections_topic={self.detections_topic}")
+        self.get_logger().info(f"decision_events_topic={self.decision_events_topic}")
+        self.get_logger().info(f"route_constraints_topic={self.route_constraints_topic}")
         self.get_logger().info(f"annotated_topic={self.annotated_topic}")
         self.get_logger().info(f"model_path={self.model_path}")
         self.get_logger().info(f"raw_conf_threshold={self.raw_conf_threshold}")
@@ -1812,6 +1841,12 @@ class PerceptionNode(Node):
         return None
 
     def _depth_distance_for_bbox(self, bbox, image_w=None, image_h=None):
+        """
+        Bbox için sensör mesafesi çıkarır.
+
+        Sensör mesafesi kararın ana kaynağı olacak.
+        Merkez tek nokta yerine bbox içinden geçerli depth değerlerini topluyoruz.
+        """
         if self.latest_depth is None:
             return None
 
@@ -1831,31 +1866,54 @@ class PerceptionNode(Node):
             y1 *= sy
             y2 *= sy
 
-        cx = int(round((x1 + x2) / 2.0))
-        cy = int(round((y1 + y2) / 2.0))
-
-        half = int(self.get_parameter("depth_roi_half_size").value)
-
-        x0 = max(0, cx - half)
-        x3 = min(dw, cx + half + 1)
-        y0 = max(0, cy - half)
-        y3 = min(dh, cy + half + 1)
-
-        if x0 >= x3 or y0 >= y3:
+        if x2 <= x1 or y2 <= y1:
             return None
-
-        roi = depth[y0:y3, x0:x3]
 
         min_m = float(self.get_parameter("depth_min_m").value)
         max_m = float(self.get_parameter("depth_max_m").value)
+        half = int(self.get_parameter("depth_roi_half_size").value)
 
-        valid = roi[np.isfinite(roi)]
-        valid = valid[(valid >= min_m) & (valid <= max_m)]
+        def valid_values(arr):
+            vals = arr[np.isfinite(arr)]
+            vals = vals[(vals >= min_m) & (vals <= max_m)]
+            return vals
 
-        if valid.size == 0:
+        bw = max(1.0, x2 - x1)
+        bh = max(1.0, y2 - y1)
+
+        pad_x = max(1.0, bw * 0.12)
+        pad_y = max(1.0, bh * 0.12)
+
+        bx0 = int(max(0, min(dw - 1, round(x1 + pad_x))))
+        bx1 = int(max(0, min(dw, round(x2 - pad_x))))
+        by0 = int(max(0, min(dh - 1, round(y1 + pad_y))))
+        by1 = int(max(0, min(dh, round(y2 - pad_y))))
+
+        vals = np.array([], dtype=np.float32)
+
+        if bx0 < bx1 and by0 < by1:
+            vals = valid_values(depth[by0:by1, bx0:bx1])
+
+        # Çok küçük bbox için merkez ROI fallback.
+        if vals.size < 4:
+            cx = int(round((x1 + x2) / 2.0))
+            cy = int(round((y1 + y2) / 2.0))
+
+            x0 = max(0, cx - half)
+            x3 = min(dw, cx + half + 1)
+            y0 = max(0, cy - half)
+            y3 = min(dh, cy + half + 1)
+
+            if x0 < x3 and y0 < y3:
+                vals = valid_values(depth[y0:y3, x0:x3])
+
+        if vals.size == 0:
             return None
 
-        return float(np.median(valid))
+        p25 = float(np.percentile(vals, 25.0))
+        med = float(np.median(vals))
+
+        return float(0.65 * p25 + 0.35 * med)
 
     def apply_depth_lidar_fusion_to_payload(self, payload):
         if not bool(self.get_parameter("depth_lidar_fusion_enabled").value):
@@ -1901,6 +1959,218 @@ class PerceptionNode(Node):
 
         return payload
 
+
+
+
+    def accept_route_constraint_temporal(self, route_constraint):
+        if not isinstance(route_constraint, dict):
+            return False
+
+        sign_type = str(route_constraint.get("sign_type", "unknown"))
+        metrics = route_constraint.get("metrics") or {}
+        now = time.time()
+
+        try:
+            cx = float(metrics.get("cx_ratio", 0.0) or 0.0)
+            cy = float(metrics.get("cy_ratio", 0.0) or 0.0)
+        except Exception:
+            cx, cy = 0.0, 0.0
+
+        key = f"{sign_type}:{round(cx, 2)}:{round(cy, 2)}"
+        rec = self.route_constraint_memory.get(key)
+        if rec and now - float(rec.get("time", 0.0)) <= float(self.route_constraint_memory_seconds):
+            count = int(rec.get("count", 0)) + 1
+        else:
+            count = 1
+
+        self.route_constraint_memory[key] = {"time": now, "count": count}
+
+        # Eski kayıtları temizle.
+        stale = [
+            k for k, v in self.route_constraint_memory.items()
+            if now - float(v.get("time", 0.0)) > float(self.route_constraint_memory_seconds) * 3.0
+        ]
+        for k in stale:
+            self.route_constraint_memory.pop(k, None)
+
+        route_constraint["stable_count"] = count
+        route_constraint["stable_required"] = int(self.route_constraint_confirm_frames)
+
+        return count >= int(self.route_constraint_confirm_frames)
+
+    def build_semantic_outputs(self, detections, tl_info, frame_w, frame_h):
+        """
+        Trafik levhalarını iki ayrı sözleşmeye ayırır:
+          - decision_events: hız, dur, yaya geçidi, trafik ışığı gibi davranış kararları
+          - route_constraints: sağa/sola dönülmez, mecburi yön, girilmez gibi rota kısıtları
+        """
+        decision_events = []
+        route_constraints = []
+
+        for det in detections:
+            if not isinstance(det, dict):
+                continue
+
+            if det.get("label") != "traffic_sign":
+                continue
+
+            decision_event = build_decision_event_from_detection(det, frame_w, frame_h)
+            if decision_event is not None:
+                decision_events.append(decision_event)
+
+            route_constraint = build_route_constraint_from_detection(det, frame_w, frame_h)
+            if route_constraint is not None:
+                if self.accept_route_constraint_temporal(route_constraint):
+                    route_constraints.append(route_constraint)
+                else:
+                    route_constraint["route_constraint_filter"] = "waiting_temporal_confirmation"
+
+        tl_event = build_traffic_light_decision_event(tl_info)
+        if tl_event is not None:
+            # Aktif trafik ışığı perception_tl_pipeline tarafından seçiliyor.
+            # Fakat sign_semantics event üretirken distance_m / tl_* oranlarını
+            # taşımıyordu. Decision kırmızı mesafesini hesaplayabilsin diye
+            # aktif detection içindeki metrikleri event'e ekliyoruz.
+            active_tl_det = None
+            tl_bbox = tl_info.get("bbox") if isinstance(tl_info, dict) else None
+
+            for d in detections:
+                if not isinstance(d, dict):
+                    continue
+                if d.get("label") != "traffic_light":
+                    continue
+                if bool(d.get("active_traffic_light", False)):
+                    active_tl_det = d
+                    break
+
+            if active_tl_det is None and tl_bbox:
+                try:
+                    tb = [float(x) for x in tl_bbox[:4]]
+                    best = None
+                    best_err = 1e18
+                    for d in detections:
+                        if not isinstance(d, dict):
+                            continue
+                        if d.get("label") != "traffic_light":
+                            continue
+                        db = d.get("bbox")
+                        if not isinstance(db, (list, tuple)) or len(db) < 4:
+                            continue
+                        db = [float(x) for x in db[:4]]
+                        err = sum(abs(db[i] - tb[i]) for i in range(4))
+                        if err < best_err:
+                            best_err = err
+                            best = d
+                    if best is not None and best_err <= 8.0:
+                        active_tl_det = best
+                except Exception:
+                    active_tl_det = None
+
+            if active_tl_det is not None:
+                # Mesafe
+                for k in [
+                    "distance_m",
+                    "distance_est",
+                    "distance_source",
+                    "front_lidar_obstacle_m",
+                ]:
+                    if active_tl_det.get(k) is not None:
+                        tl_event[k] = active_tl_det.get(k)
+
+                # Bbox oran/metrikleri
+                for k in [
+                    "tl_cx_ratio",
+                    "tl_cy_ratio",
+                    "tl_width_ratio",
+                    "tl_height_ratio",
+                    "tl_bottom_ratio",
+                    "tl_area_ratio",
+                    "tl_area",
+                    "bbox_width",
+                    "bbox_height",
+                    "area_ratio",
+                    "center_x",
+                    "center_y",
+                ]:
+                    if active_tl_det.get(k) is not None:
+                        tl_event[k] = active_tl_det.get(k)
+
+                # Debug / izlenebilirlik
+                tl_event["active_traffic_light"] = True
+                tl_event["selected_by"] = "perception_active_tl_with_distance"
+
+            # Aktif detection eşleşmezse bile tl_info içindeki alanları kaybetme.
+            if isinstance(tl_info, dict):
+                for k in [
+                    "distance_m",
+                    "distance_est",
+                    "distance_source",
+                    "tl_cx_ratio",
+                    "tl_cy_ratio",
+                    "tl_width_ratio",
+                    "tl_height_ratio",
+                    "tl_bottom_ratio",
+                    "tl_area_ratio",
+                    "tl_area",
+                ]:
+                    if tl_event.get(k) is None and tl_info.get(k) is not None:
+                        tl_event[k] = tl_info.get(k)
+
+            decision_events.append(tl_event)
+
+        decision_events.sort(
+            key=lambda x: float(x.get("confidence") or x.get("sign_confidence") or 0.0),
+            reverse=True,
+        )
+        route_constraints.sort(
+            key=lambda x: float(x.get("confidence") or x.get("sign_confidence") or 0.0),
+            reverse=True,
+        )
+
+        return decision_events, route_constraints
+
+    def publish_semantic_outputs(self, decision_events, route_constraints, frame_w, frame_h, tl_info):
+        stamp = time.time()
+
+        decision_payload = {
+            "stamp": stamp,
+            "image_width": int(frame_w),
+            "image_height": int(frame_h),
+            "event_count": len(decision_events),
+            "events": decision_events,
+            "active_traffic_light": {
+                "state": tl_info.get("state", "unknown") if isinstance(tl_info, dict) else "unknown",
+                "bbox": tl_info.get("bbox") if isinstance(tl_info, dict) else None,
+                "state_confidence": tl_info.get("state_confidence") if isinstance(tl_info, dict) else None,
+                "source": tl_info.get("state_source") if isinstance(tl_info, dict) else None,
+            },
+        }
+
+        route_payload = {
+            "stamp": stamp,
+            "image_width": int(frame_w),
+            "image_height": int(frame_h),
+            "constraint_count": len(route_constraints),
+            "constraints": route_constraints,
+        }
+
+        msg_decision = String()
+        msg_decision.data = json.dumps(decision_payload, ensure_ascii=False)
+        self.decision_events_pub.publish(msg_decision)
+
+        msg_route = String()
+        msg_route.data = json.dumps(route_payload, ensure_ascii=False)
+        self.route_constraints_pub.publish(msg_route)
+
+        if decision_events or route_constraints:
+            self.get_logger().info(
+                "PERCEPTION_SEMANTICS "
+                f"decision_events={len(decision_events)} "
+                f"route_constraints={len(route_constraints)} "
+                f"route_signs={[x.get('sign_type') for x in route_constraints[:3]]} "
+                f"decision_events_types={[x.get('event_type') for x in decision_events[:4]]}",
+                throttle_duration_sec=0.5,
+            )
 
     def image_callback(self, msg):
         """
@@ -2039,6 +2309,17 @@ class PerceptionNode(Node):
 
         detections = self.resolve_person_motorcycle_conflicts(detections)
 
+        # SENSOR_DISTANCE_FIRST:
+        # Depth mesafesini TL pipeline'dan ÖNCE detection'lara yaz.
+        # Aktif trafik ışığı seçimi ve decision event artık sensör mesafesini taşır.
+        pre_tl_payload = {
+            "image_width": frame_w,
+            "image_height": frame_h,
+            "detections": detections,
+        }
+        pre_tl_payload = self.apply_depth_lidar_fusion_to_payload(pre_tl_payload)
+        detections = pre_tl_payload.get("detections", detections)
+
         detections, tl_info, tl_candidates, tl_rejected = self.tl_pipeline.process(
             frame,
             detections,
@@ -2077,6 +2358,12 @@ class PerceptionNode(Node):
         self.draw_all_red_lights_on_screen(annotated)
         debug_canvas = self.make_debug_canvas(annotated, detections)
 
+        # CLEAN_SEMANTIC_AFTER_DEPTH:
+        # decision_events/route_constraints payload'a depth/lidar eklendikten sonra
+        # üretilecek. Bu noktada placeholder bırakıyoruz.
+        decision_events = []
+        route_constraints = []
+
         payload = {
             "stamp": time.time(),
             "image_width": frame_w,
@@ -2099,6 +2386,8 @@ class PerceptionNode(Node):
             "traffic_light_state_conf_threshold": self.tl_state_conf_threshold,
 
             "detections": detections,
+            "decision_events": decision_events,
+            "route_constraints": route_constraints,
 
             "traffic_light_state": tl_info.get("state", "unknown"),
             "traffic_light_confidence": tl_info.get("confidence"),
@@ -2113,8 +2402,28 @@ class PerceptionNode(Node):
             "perception_rewrite_v1": True,
         }
 
-        msg_out = String()
+        # Önce depth/lidar fusion uygula, sonra semantic output üret.
         payload = self.apply_depth_lidar_fusion_to_payload(payload)
+        detections = payload.get("detections", detections)
+
+        decision_events, route_constraints = self.build_semantic_outputs(
+            detections,
+            tl_info,
+            frame_w,
+            frame_h,
+        )
+        payload["decision_events"] = decision_events
+        payload["route_constraints"] = route_constraints
+
+        self.publish_semantic_outputs(
+            decision_events,
+            route_constraints,
+            frame_w,
+            frame_h,
+            tl_info,
+        )
+
+        msg_out = String()
         msg_out.data = json.dumps(payload, ensure_ascii=False)
         self.det_pub.publish(msg_out)
 

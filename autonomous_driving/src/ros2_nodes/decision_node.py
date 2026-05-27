@@ -23,6 +23,8 @@ class DecisionNode(Node):
         super().__init__("decision_node")
 
         self.declare_parameter("detections_topic", "/adas/perception/detections_json")
+        self.declare_parameter("decision_events_topic", "/adas/perception/decision_events_json")
+        self.declare_parameter("route_intent_topic", "/adas/planning/route_intent")
         self.declare_parameter("decision_topic", "/adas/decision")
 
         # Mesafe yaklaşımı: bbox yüksekliğine göre basit tahmin.
@@ -90,7 +92,40 @@ class DecisionNode(Node):
         self.declare_parameter("tl_active_roi_x_max", 0.88)
         self.declare_parameter("tl_active_roi_y_min", 0.05)
         self.declare_parameter("tl_active_roi_y_max", 0.58)
+        # Trafik ışığı çok uzaktayken/minik bbox iken STOP üretmesin.
+        # Yeşil ise serbest bırakmak için kabul edilebilir; kırmızı/sarı için yakınlık şartı var.
+        self.declare_parameter("tl_stop_min_bottom_ratio", 0.28)
+        self.declare_parameter("tl_stop_min_height_ratio", 0.035)
+        self.declare_parameter("tl_stop_min_area_ratio", 0.00015)
+        self.declare_parameter("tl_green_release_bypass_hold", True)
+        self.declare_parameter("tl_prefer_semantic_event", True)
+
+        # KIRMIZI 1. ÖNCELİK:
+        # Kırmızı bir kere görüldüyse unknown frame'lerde GO'ya düşme.
+        # Net yeşil gelene kadar veya latch süresi dolana kadar STOP kal.
+        self.declare_parameter("red_light_latch_enabled", True)
+        self.declare_parameter("red_light_latch_seconds", 8.0)
+        self.declare_parameter("red_light_min_green_release_count", 1)
         self.declare_parameter("yellow_as_slow", True)
+        self.declare_parameter("tl_green_release_min_det_conf", 0.25)
+        self.declare_parameter("tl_green_release_min_state_conf", 0.80)
+        self.declare_parameter("tl_green_release_min_area_ratio", 0.00030)
+        self.declare_parameter("tl_green_release_min_height_ratio", 0.030)
+        self.declare_parameter("tl_green_release_max_distance_m", 45.0)
+        self.declare_parameter("tl_green_release_min_count", 1)
+        self.declare_parameter("tl_red_stop_distance_m", 12.0)
+        self.declare_parameter("tl_red_crawl_distance_m", 18.0)
+        self.declare_parameter("tl_red_slow_distance_m", 24.0)
+        self.declare_parameter("tl_red_stop_offset_m", 3.0)
+        self.declare_parameter("tl_red_no_distance_stop_bottom_ratio", 0.54)
+        self.declare_parameter("tl_red_no_distance_stop_height_ratio", 0.025)
+        self.declare_parameter("tl_red_no_distance_stop_area_ratio", 0.00018)
+        self.declare_parameter("tl_red_distance_memory_seconds", 6.0)
+        self.declare_parameter("tl_red_distance_outlier_jump_m", 18.0)
+        self.declare_parameter("tl_red_distance_far_outlier_m", 55.0)
+        self.declare_parameter("tl_red_far_approach_speed_kmh", 20.0)
+        self.declare_parameter("tl_red_memory_decay_mps", 4.2)
+        self.declare_parameter("tl_red_raw_stall_epsilon_m", 0.70)
         # Trafik ışığı final kararı decision_node içindedir.
         self.declare_parameter("handle_traffic_lights", True)
 
@@ -98,8 +133,13 @@ class DecisionNode(Node):
         self.declare_parameter("stop_hold_seconds", 0.8)
         self.declare_parameter("slow_hold_seconds", 0.5)
         self.declare_parameter("decision_timeout_seconds", 1.5)
+        self.declare_parameter("decision_events_timeout_s", 1.5)
+        self.declare_parameter("route_intent_timeout_s", 1.5)
+        self.declare_parameter("route_constraint_wait_stop", False)
 
         self.detections_topic = self.get_parameter("detections_topic").value
+        self.decision_events_topic = self.get_parameter("decision_events_topic").value
+        self.route_intent_topic = self.get_parameter("route_intent_topic").value
         self.decision_topic = self.get_parameter("decision_topic").value
 
         self.distance_k = float(self.get_parameter("distance_k").value)
@@ -166,12 +206,63 @@ class DecisionNode(Node):
         self.tl_active_roi_x_max = float(self.get_parameter("tl_active_roi_x_max").value)
         self.tl_active_roi_y_min = float(self.get_parameter("tl_active_roi_y_min").value)
         self.tl_active_roi_y_max = float(self.get_parameter("tl_active_roi_y_max").value)
+        self.tl_stop_min_bottom_ratio = float(self.get_parameter("tl_stop_min_bottom_ratio").value)
+        self.tl_stop_min_height_ratio = float(self.get_parameter("tl_stop_min_height_ratio").value)
+        self.tl_stop_min_area_ratio = float(self.get_parameter("tl_stop_min_area_ratio").value)
+        self.tl_green_release_bypass_hold = bool(self.get_parameter("tl_green_release_bypass_hold").value)
+        self.tl_prefer_semantic_event = bool(self.get_parameter("tl_prefer_semantic_event").value)
+        self.red_light_latch_enabled = bool(self.get_parameter("red_light_latch_enabled").value)
+        self.red_light_latch_seconds = float(self.get_parameter("red_light_latch_seconds").value)
+        self.red_light_min_green_release_count = int(
+            self.get_parameter("red_light_min_green_release_count").value
+        )
         self.yellow_as_slow = bool(self.get_parameter("yellow_as_slow").value)
+        self.tl_green_release_min_det_conf = float(self.get_parameter("tl_green_release_min_det_conf").value)
+        self.tl_green_release_min_state_conf = float(self.get_parameter("tl_green_release_min_state_conf").value)
+        self.tl_green_release_min_area_ratio = float(self.get_parameter("tl_green_release_min_area_ratio").value)
+        self.tl_green_release_min_height_ratio = float(self.get_parameter("tl_green_release_min_height_ratio").value)
+        self.tl_green_release_max_distance_m = float(self.get_parameter("tl_green_release_max_distance_m").value)
+        self.tl_green_release_min_count = int(self.get_parameter("tl_green_release_min_count").value)
+        self._qualified_green_count = 0
+        self.tl_red_stop_distance_m = float(self.get_parameter("tl_red_stop_distance_m").value)
+        self.tl_red_crawl_distance_m = float(self.get_parameter("tl_red_crawl_distance_m").value)
+        self.tl_red_slow_distance_m = float(self.get_parameter("tl_red_slow_distance_m").value)
+        self.tl_red_stop_offset_m = float(self.get_parameter("tl_red_stop_offset_m").value)
+        self.tl_red_no_distance_stop_bottom_ratio = float(
+            self.get_parameter("tl_red_no_distance_stop_bottom_ratio").value
+        )
+        self.tl_red_no_distance_stop_height_ratio = float(
+            self.get_parameter("tl_red_no_distance_stop_height_ratio").value
+        )
+        self.tl_red_no_distance_stop_area_ratio = float(
+            self.get_parameter("tl_red_no_distance_stop_area_ratio").value
+        )
+        self.tl_red_distance_memory_seconds = float(
+            self.get_parameter("tl_red_distance_memory_seconds").value
+        )
+        self.tl_red_distance_outlier_jump_m = float(
+            self.get_parameter("tl_red_distance_outlier_jump_m").value
+        )
+        self.tl_red_distance_far_outlier_m = float(
+            self.get_parameter("tl_red_distance_far_outlier_m").value
+        )
+        self.tl_red_far_approach_speed = self.kmh_to_mps(
+            float(self.get_parameter("tl_red_far_approach_speed_kmh").value)
+        )
+        self.tl_red_memory_decay_mps = float(
+            self.get_parameter("tl_red_memory_decay_mps").value
+        )
+        self.tl_red_raw_stall_epsilon_m = float(
+            self.get_parameter("tl_red_raw_stall_epsilon_m").value
+        )
         self.handle_traffic_lights = bool(self.get_parameter("handle_traffic_lights").value)
 
         self.stop_hold_seconds = float(self.get_parameter("stop_hold_seconds").value)
         self.slow_hold_seconds = float(self.get_parameter("slow_hold_seconds").value)
         self.decision_timeout_seconds = float(self.get_parameter("decision_timeout_seconds").value)
+        self.decision_events_timeout_s = float(self.get_parameter("decision_events_timeout_s").value)
+        self.route_intent_timeout_s = float(self.get_parameter("route_intent_timeout_s").value)
+        self.route_constraint_wait_stop = bool(self.get_parameter("route_constraint_wait_stop").value)
 
         self.vehicle_labels = {
             "vehicle",
@@ -227,6 +318,20 @@ class DecisionNode(Node):
         self.last_output = None
         self.last_output_time = 0.0
 
+        self.latest_decision_events = []
+        self.last_decision_events_time = 0.0
+        self.latest_route_intent = None
+        self.last_route_intent_time = 0.0
+
+        # Trafik ışığı kırmızı hafızası.
+        self.red_light_latch_until = 0.0
+        self.red_light_latch_info = None
+        self.red_light_green_seen_count = 0
+        self.red_light_first_seen_time = 0.0
+        self.last_red_distance_m = None
+        self.last_red_distance_time = 0.0
+        self.last_red_distance_source = None
+
         self.pub = self.create_publisher(String, self.decision_topic, 10)
         self.sub = self.create_subscription(
             String,
@@ -234,10 +339,81 @@ class DecisionNode(Node):
             self.callback,
             10,
         )
+        self.create_subscription(
+            String,
+            self.decision_events_topic,
+            self.decision_events_cb,
+            10,
+        )
+        self.create_subscription(
+            String,
+            self.route_intent_topic,
+            self.route_intent_cb,
+            10,
+        )
 
         self.get_logger().info(
-            f"decision_node başladı: {self.detections_topic} -> {self.decision_topic}"
+            f"decision_node başladı: detections={self.detections_topic} "
+            f"decision_events={self.decision_events_topic} "
+            f"route_intent={self.route_intent_topic} -> {self.decision_topic}"
         )
+
+
+    def decision_events_cb(self, msg):
+        try:
+            data = json.loads(msg.data)
+            events = data.get("events", [])
+            if not isinstance(events, list):
+                events = []
+            self.latest_decision_events = events
+            self.last_decision_events_time = time.time()
+        except Exception as exc:
+            self.get_logger().warning(f"decision events parse hatası: {exc}")
+
+    def route_intent_cb(self, msg):
+        try:
+            self.latest_route_intent = json.loads(msg.data)
+            self.last_route_intent_time = time.time()
+        except Exception as exc:
+            self.get_logger().warning(f"route intent parse hatası: {exc}")
+
+    def get_fresh_decision_events(self):
+        if not self.latest_decision_events:
+            return []
+        if time.time() - self.last_decision_events_time > self.decision_events_timeout_s:
+            return []
+        return list(self.latest_decision_events)
+
+    def get_fresh_route_intent(self):
+        if self.latest_route_intent is None:
+            return None
+        if time.time() - self.last_route_intent_time > self.route_intent_timeout_s:
+            return None
+        return dict(self.latest_route_intent)
+
+    def route_intent_requires_wait(self, route_intent):
+        if not isinstance(route_intent, dict):
+            return False, "route_intent_missing"
+
+        status = str(route_intent.get("route_decision_status", "clear")).lower().strip()
+        reason = str(route_intent.get("route_decision_reason", status or "clear"))
+
+        # ÖNEMLİ:
+        # Rota kısıtları artık decision tarafında hard STOP üretmez.
+        # Çünkü algılanan mecburi yön / dönülmez levhaları bazen yanlış tabeladan,
+        # yol kenarından veya geçmiş/stale constraint'ten geliyor ve yeşilde aracı kilitliyor.
+        # Rota bu bilgiyi yine kullanabilir, debug'a basılır; ama karar katmanı aracı durdurmaz.
+        if status == "blocked":
+            if self.route_constraint_wait_stop:
+                return True, reason
+            return False, f"route_constraint_warning_only:{reason}"
+
+        if status in {"violation", "violation_warning"}:
+            if self.route_constraint_wait_stop:
+                return True, reason
+            return False, f"route_constraint_warning_only:{reason}"
+
+        return False, status or "clear"
 
     def clamp(self, value, mn, mx):
         return max(mn, min(float(value), mx))
@@ -500,17 +676,415 @@ class DecisionNode(Node):
             "reason": "front_vehicle_safe",
         }
 
+
+    def traffic_light_geometry_ok(self, item, frame_width, frame_height):
+        """
+        Kırmızı/sarı ışık için mesafe filtresi.
+        Çok küçük/uzak ışıklar STOP üretirse araç kavşaktan gereksiz uzakta kalıyor.
+        Yeşil ışık release için serbest bırakılır; kırmızı/sarı ise yakınlık şartı ister.
+        """
+        state = str(
+            item.get("traffic_light_state", item.get("state", "unknown"))
+        ).lower().strip()
+
+        if state not in {"red", "yellow"}:
+            return True, "green_or_unknown_no_stop_geometry_gate"
+
+        bbox = item.get("bbox")
+        m = self.bbox_metrics({"bbox": bbox}, frame_width, frame_height)
+        if m is None:
+            return False, "tl_stop_reject_no_bbox"
+
+        if m["bottom_ratio"] < self.tl_stop_min_bottom_ratio:
+            return False, f"tl_stop_reject_far_bottom:{m['bottom_ratio']:.3f}"
+
+        if m["h_ratio"] < self.tl_stop_min_height_ratio:
+            return False, f"tl_stop_reject_small_height:{m['h_ratio']:.4f}"
+
+        if m["area_ratio"] < self.tl_stop_min_area_ratio:
+            return False, f"tl_stop_reject_small_area:{m['area_ratio']:.6f}"
+
+        return True, "tl_stop_geometry_ok"
+
+
+    def select_priority_red_light(self, decision_events, detections, frame_width, frame_height):
+        """
+        Güvenlik kuralı:
+        Aynı anda yeşil ve kırmızı görülürse, kırmızı önceliklidir.
+        Semantic pipeline bazen yeşil seçse bile raw detection içinde geçerli kırmızı varsa STOP üretir.
+        """
+        candidates = []
+
+        def add_candidate(item, source_name):
+            if not isinstance(item, dict):
+                return
+
+            state = str(
+                item.get("traffic_light_state", item.get("state", "unknown"))
+            ).lower().strip()
+
+            if state != "red":
+                return
+
+            ok, gate_reason = self.traffic_light_geometry_ok(item, frame_width, frame_height)
+            if not ok:
+                return
+
+            m = self.bbox_metrics({"bbox": item.get("bbox")}, frame_width, frame_height)
+            if m is None:
+                return
+
+            try:
+                state_conf = float(
+                    item.get(
+                        "traffic_light_state_confidence",
+                        item.get("state_confidence", item.get("confidence", 0.0)),
+                    )
+                    or 0.0
+                )
+            except Exception:
+                state_conf = 0.0
+
+            try:
+                det_conf = float(item.get("det_confidence", item.get("confidence", 0.0)) or 0.0)
+            except Exception:
+                det_conf = 0.0
+
+            # Kırmızı için merkezden ziyade alt-yakınlık + güven + alan önemli.
+            score = (
+                state_conf * 4.0
+                + det_conf * 2.0
+                + float(m.get("bottom_ratio", 0.0)) * 1.5
+                + float(m.get("area_ratio", 0.0)) * 80.0
+            )
+
+            selected = dict(item)
+            selected["label"] = "traffic_light"
+            selected["traffic_light_state"] = "red"
+            selected["state_confidence"] = state_conf
+            selected["traffic_light_state_confidence"] = state_conf
+            selected["priority_red_source"] = source_name
+            selected["traffic_light_geometry_gate"] = gate_reason
+            selected["priority_red_score"] = round(score, 4)
+            candidates.append((score, selected))
+
+        for event in decision_events or []:
+            if str(event.get("event_type", "")).strip() == "traffic_light":
+                add_candidate(event, "decision_event")
+
+        for det in detections or []:
+            if str(det.get("label", "")).strip() == "traffic_light":
+                add_candidate(det, "raw_detection")
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+
+    def apply_red_light_latch(self, traffic_light_state, traffic_light_det):
+        """
+        Kırmızı bir kere görüldüğünde unknown frame'lerde GO'ya düşmeyi engeller.
+
+        Kritik:
+        - Kırmızı kilidi süre bitti diye hemen bırakılmaz.
+        - Green geldiğinde burada direkt release etmiyoruz.
+        - Green branch, det_conf/area/state_conf ve ardışık frame şartını doğrulayıp latch'i temizler.
+        """
+        if not self.red_light_latch_enabled:
+            return traffic_light_state, traffic_light_det
+
+        now = time.time()
+        state = str(traffic_light_state or "unknown").lower().strip()
+
+        if state == "red":
+            info = dict(traffic_light_det or {})
+            info["label"] = "traffic_light"
+            info["traffic_light_state"] = "red"
+            info["red_light_latched"] = True
+            info["red_light_latch_action"] = "set_or_extend"
+            info["red_light_latch_seconds"] = round(float(self.red_light_latch_seconds), 2)
+
+            if float(getattr(self, "red_light_first_seen_time", 0.0) or 0.0) <= 0.0:
+                self.red_light_first_seen_time = now
+
+            self.red_light_latch_until = max(
+                float(self.red_light_latch_until or 0.0),
+                now + float(self.red_light_latch_seconds),
+            )
+            self.red_light_latch_info = info
+            self.red_light_green_seen_count = 0
+            return "red", info
+
+        latch_active = now < float(self.red_light_latch_until or 0.0)
+        if latch_active:
+            if state == "green":
+                # Green adayını build_rule_decision içindeki stable-green filtresine geçir.
+                # Burada latch temizlenmez.
+                info = dict(traffic_light_det or {})
+                info["label"] = "traffic_light"
+                info["traffic_light_state"] = "green"
+                info["red_light_latched"] = True
+                info["red_light_latch_action"] = "green_candidate_wait_stable"
+                return "green", info
+
+            self.red_light_green_seen_count = 0
+
+            # Green doğrulanmadığı sürece unknown/yellow frame'lerde kırmızıyı tut.
+            info = dict(self.red_light_latch_info or {})
+            info["label"] = "traffic_light"
+            info["traffic_light_state"] = "red"
+            info["red_light_latched"] = True
+            info["red_light_latch_action"] = f"hold_on_{state}"
+            info["red_light_latch_left_s"] = round(
+                max(0.0, float(self.red_light_latch_until) - now),
+                2,
+            )
+            return "red", info
+
+        # Güvenlik timeout'u dolduysa temizle.
+        self.red_light_latch_until = 0.0
+        self.red_light_latch_info = None
+        self.red_light_green_seen_count = 0
+        self.red_light_first_seen_time = 0.0
+        self.last_red_distance_m = None
+        self.last_red_distance_time = 0.0
+        self.last_red_distance_source = None
+        return traffic_light_state, traffic_light_det
+
+    def select_traffic_light_from_decision_events(self, decision_events, frame_width, frame_height):
+        """
+        Perception TL pipeline zaten aktif ışığı seçip filtreliyor.
+        Decision burada tekrar küçük bbox / geometry gate ile kırmızıyı öldürmemeli.
+
+        Kritik kural:
+        - decision_events içindeki traffic_light event'i ana kaynaktır.
+        - Red > Yellow > Green önceliği vardır.
+        - Geometry sadece perception tarafında yapılır; decision burada güvenlik kararını uygular.
+        """
+        if not self.tl_prefer_semantic_event:
+            return "unknown", None
+
+        candidates = []
+
+        for event in decision_events or []:
+            if not isinstance(event, dict):
+                continue
+
+            if str(event.get("event_type", "")).strip() != "traffic_light":
+                continue
+
+            state = str(
+                event.get("traffic_light_state", event.get("state", "unknown"))
+            ).lower().strip()
+
+            if state not in {"red", "yellow", "green"}:
+                continue
+
+            try:
+                state_conf = float(
+                    event.get(
+                        "traffic_light_state_confidence",
+                        event.get(
+                            "state_confidence",
+                            event.get("state_conf", event.get("confidence", 0.0)),
+                        ),
+                    )
+                    or 0.0
+                )
+            except Exception:
+                state_conf = 0.0
+
+            try:
+                det_conf = float(
+                    event.get(
+                        "det_confidence",
+                        event.get("detection_confidence", event.get("confidence", 0.0)),
+                    )
+                    or 0.0
+                )
+            except Exception:
+                det_conf = 0.0
+
+            selected = dict(event)
+            selected["label"] = "traffic_light"
+            selected["traffic_light_state"] = state
+            selected["state_confidence"] = state_conf
+            selected["traffic_light_state_confidence"] = state_conf
+            selected["traffic_light_geometry_gate"] = "trusted_perception_decision_event"
+            selected["selected_by"] = "decision_events_trusted_active_tl"
+
+            if state == "red":
+                priority = 3.0
+            elif state == "yellow":
+                priority = 2.0
+            else:
+                priority = 1.0
+
+            score = priority * 10.0 + state_conf * 2.0 + det_conf
+            selected["decision_tl_score"] = round(float(score), 4)
+
+            candidates.append((score, selected))
+
+        if not candidates:
+            return "unknown", None
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        best = candidates[0][1]
+        return str(best.get("traffic_light_state", "unknown")).lower().strip(), best
+
+
+    def get_best_sign(self, detections, frame_width=None, frame_height=None):
+        """
+        Decision log / active sign fallback.
+
+        Uzak/minik/yanlış tabelalar decision'ı etkilemesin.
+        sign_min_bottom_ratio, sign_min_area_ratio ve sign_center_bonus burada gerçekten kullanılır.
+        """
+        best = None
+        best_score = -1.0
+
+        for det in detections or []:
+            if det.get("label") != "traffic_sign":
+                continue
+
+            sign_type = str(
+                det.get("traffic_sign_type")
+                or det.get("sign_type")
+                or det.get("type")
+                or "unknown"
+            ).lower().strip()
+
+            if sign_type in {"", "unknown", "none", "bilinmiyor"}:
+                continue
+
+            source = str(det.get("sign_source") or det.get("source") or "").lower()
+            if "classifier_low_conf" in source:
+                continue
+
+            try:
+                det_conf = float(det.get("confidence", 0.0) or 0.0)
+            except Exception:
+                det_conf = 0.0
+
+            try:
+                sign_conf = float(
+                    det.get("sign_confidence")
+                    or det.get("traffic_sign_confidence")
+                    or det.get("classifier_confidence")
+                    or det_conf
+                    or 0.0
+                )
+            except Exception:
+                sign_conf = 0.0
+
+            if det_conf < self.traffic_sign_conf_threshold:
+                continue
+
+            if sign_conf < self.sign_classifier_conf_threshold:
+                continue
+
+            m = None
+            area_ratio = 0.0
+            bottom_ratio = 0.0
+            center_score = 0.0
+
+            if frame_width and frame_height:
+                try:
+                    m = self.bbox_metrics(det, frame_width, frame_height)
+                except Exception:
+                    m = None
+
+                if m is None:
+                    continue
+
+                area_ratio = float(m.get("area_ratio", 0.0) or 0.0)
+                bottom_ratio = float(m.get("bottom_ratio", 0.0) or 0.0)
+                cx_ratio = float(m.get("cx_ratio", 0.5) or 0.5)
+
+                if area_ratio < self.sign_min_area_ratio:
+                    continue
+
+                if bottom_ratio < self.sign_min_bottom_ratio:
+                    continue
+
+                if cx_ratio < 0.08 or cx_ratio > 0.98:
+                    continue
+
+                center_score = 1.0 - min(1.0, abs(cx_ratio - 0.50) / 0.50)
+
+            distance_m = det.get("distance_m") or det.get("distance_est")
+            try:
+                distance_m = float(distance_m) if distance_m is not None else None
+            except Exception:
+                distance_m = None
+
+            if distance_m is not None and distance_m > 45.0:
+                continue
+
+            if sign_type in self.stop_signs:
+                if sign_conf < max(0.80, self.sign_classifier_conf_threshold):
+                    continue
+
+                # Uzak/sahte DUR tabelası yeşil ışıkta ani fren yaptırmasın.
+                if distance_m is not None and distance_m > 18.0:
+                    continue
+
+                if m is not None and bottom_ratio < max(0.62, self.sign_min_bottom_ratio):
+                    continue
+
+            score = (
+                det_conf * 0.35
+                + sign_conf * 0.50
+                + area_ratio * 35.0
+                + bottom_ratio * 0.20
+                + center_score * float(self.sign_center_bonus)
+            )
+
+            if score > best_score:
+                best_score = score
+                best = dict(det)
+                best["traffic_sign_type"] = sign_type
+                best["active_sign_score"] = round(float(score), 4)
+                best["active_sign_filter"] = "decision_near_sign_filter"
+                if m is not None:
+                    best["bottom_ratio"] = round(bottom_ratio, 4)
+                    best["area_ratio"] = round(area_ratio, 6)
+
+        return best
+
+
     def select_active_traffic_light(self, detections, frame_width, frame_height):
+        """
+        Decision fallback trafik ışığı seçimi.
+
+        Normal mimaride aktif trafik ışığını perception_tl_pipeline.select_active()
+        seçer ve decision_events içinde decision'a gönderir.
+
+        Bu fonksiyon sadece decision_events gelmezse fallback olarak kullanılmalı.
+        Bu yüzden burada küçük/uzak/yanlış bbox'lara karşı çok daha sıkı filtre var.
+        """
+
         if not getattr(self, "handle_traffic_lights", False):
             return "unknown", {"traffic_light_disabled": True}
 
         candidates = []
 
+        # Perception ile aynı mantığa yakın tutuyoruz.
+        target_x = float(getattr(self, "tl_active_target_x_ratio", 0.64))
+        target_y = float(getattr(self, "tl_active_target_y_ratio", 0.24))
+
+        # Kırmızı/sarı STOP için küçük bbox kabul edilmesin.
+        min_width_ratio = float(getattr(self, "tl_stop_min_width_ratio", 0.012))
+        min_height_ratio = float(getattr(self, "tl_stop_min_height_ratio", 0.040))
+        min_area_ratio = float(getattr(self, "tl_stop_min_area_ratio", 0.00050))
+        min_bottom_ratio = float(getattr(self, "tl_stop_min_bottom_ratio", 0.10))
+
         for det in detections:
             if det.get("label") != "traffic_light":
                 continue
 
-            det_conf = float(det.get("confidence", 0.0))
+            det_conf = float(det.get("confidence", 0.0) or 0.0)
             if det_conf < self.traffic_light_conf_threshold:
                 continue
 
@@ -526,25 +1100,87 @@ class DecisionNode(Node):
             if m is None:
                 continue
 
+            ok_geom, geom_reason = self.traffic_light_geometry_ok(
+                det,
+                frame_width,
+                frame_height,
+            )
+            if not ok_geom:
+                det["traffic_light_geometry_rejected"] = True
+                det["traffic_light_geometry_gate"] = geom_reason
+                continue
+
+            # Decision fallback'te de ROI dışı ışığı aktif sayma.
             if not (
                 self.tl_active_roi_x_min <= m["cx_ratio"] <= self.tl_active_roi_x_max
                 and self.tl_active_roi_y_min <= m["cy_ratio"] <= self.tl_active_roi_y_max
             ):
+                det["traffic_light_geometry_rejected"] = True
+                det["traffic_light_geometry_gate"] = (
+                    f"tl_reject_outside_roi:"
+                    f"x={m['cx_ratio']:.3f},y={m['cy_ratio']:.3f}"
+                )
                 continue
 
-            # Aktif ışık seçiminde yanlış arkadaki kırmızıyı abartmamak için
-            # önce konum/güven/alan ağırlıklı seçiyoruz.
-            center_score = 1.0 - min(1.0, abs(m["cx_ratio"] - 0.55) / 0.55)
+            # Green release için küçük bbox daha tolere edilebilir.
+            # Ama red/yellow STOP için küçük bbox kesinlikle kabul edilmemeli.
+            if state in {"red", "yellow"}:
+                if m["w_ratio"] < min_width_ratio:
+                    det["traffic_light_geometry_rejected"] = True
+                    det["traffic_light_geometry_gate"] = (
+                        f"tl_stop_reject_small_width:{m['w_ratio']:.4f}"
+                    )
+                    continue
+
+                if m["h_ratio"] < min_height_ratio:
+                    det["traffic_light_geometry_rejected"] = True
+                    det["traffic_light_geometry_gate"] = (
+                        f"tl_stop_reject_small_height:{m['h_ratio']:.4f}"
+                    )
+                    continue
+
+                if m["area_ratio"] < min_area_ratio:
+                    det["traffic_light_geometry_rejected"] = True
+                    det["traffic_light_geometry_gate"] = (
+                        f"tl_stop_reject_small_area:{m['area_ratio']:.6f}"
+                    )
+                    continue
+
+                if m["bottom_ratio"] < min_bottom_ratio:
+                    det["traffic_light_geometry_rejected"] = True
+                    det["traffic_light_geometry_gate"] = (
+                        f"tl_stop_reject_far_bottom:{m['bottom_ratio']:.3f}"
+                    )
+                    continue
+
+            x_score = 1.0 - min(1.0, abs(m["cx_ratio"] - target_x) / 0.38)
+            y_score = 1.0 - min(1.0, abs(m["cy_ratio"] - target_y) / 0.34)
+            size_score = min(1.0, m["area_ratio"] / 0.00150)
+            bottom_score = min(1.0, m["bottom_ratio"] / 0.34)
+
+            # Decision fallback'te güven skorunu tamamen baskın yapmıyoruz.
+            # Aksi halde küçük bbox + yüksek classifier confidence yine yanlış STOP üretir.
             score = (
-                state_conf * 3.0
-                + det_conf * 2.0
-                + m["area_ratio"] * 25.0
-                + center_score
+                x_score * 0.34
+                + y_score * 0.16
+                + size_score * 0.22
+                + bottom_score * 0.10
+                + state_conf * 0.10
+                + det_conf * 0.08
             )
 
             selected = dict(det)
             selected["state_confidence"] = state_conf
-            selected["active_tl_score"] = score
+            selected["active_tl_score"] = round(float(score), 4)
+            selected["active_tl_source"] = "decision_fallback"
+            selected["tl_cx_ratio"] = round(float(m["cx_ratio"]), 4)
+            selected["tl_cy_ratio"] = round(float(m["cy_ratio"]), 4)
+            selected["tl_width_ratio"] = round(float(m["w_ratio"]), 4)
+            selected["tl_height_ratio"] = round(float(m["h_ratio"]), 4)
+            selected["tl_bottom_ratio"] = round(float(m["bottom_ratio"]), 4)
+            selected["tl_area_ratio"] = round(float(m["area_ratio"]), 6)
+            selected["traffic_light_geometry_gate"] = "decision_fallback_geometry_ok"
+
             candidates.append((score, selected))
 
         if not candidates:
@@ -553,172 +1189,6 @@ class DecisionNode(Node):
         candidates.sort(key=lambda item: item[0], reverse=True)
         best = candidates[0][1]
         return str(best.get("traffic_light_state", "unknown")).lower().strip(), best
-
-    def get_best_sign(self, detections, frame_width, frame_height):
-        """
-        En güvenilir/aktif trafik levhasını seçer.
-
-        Eski mantık sadece güven skoruna bakıyordu. Bu da çok uzaktaki veya
-        görüntünün köşesindeki levhayı karar sebebi yapabiliyordu.
-
-        Yeni mantık:
-        - traffic_sign label ister
-        - YOLO + classifier eşiği ister
-        - bbox alanı ve görüntüde yeterince aşağı/yakın olma şartı ister
-        - STOP/SLOW levhalarına öncelik verir
-        """
-        candidates = []
-
-        for det in detections:
-            if det.get("label") != "traffic_sign":
-                continue
-
-            yolo_conf = float(det.get("confidence", 0.0))
-            sign_type = str(det.get("sign_type", "unknown")).strip()
-
-            if yolo_conf < self.traffic_sign_conf_threshold:
-                continue
-
-            if sign_type == "unknown":
-                continue
-
-            sign_conf = float(det.get("sign_confidence", yolo_conf))
-            if sign_conf < self.sign_classifier_conf_threshold:
-                continue
-
-            m = self.bbox_metrics(det, frame_width, frame_height)
-            if m is None:
-                continue
-
-            # Çok küçük/uzak levhalar karar üretmesin.
-            if m["area_ratio"] < self.sign_min_area_ratio:
-                continue
-
-            # Tabela genelde yanlarda olur; merkez koridor şartı koymuyoruz.
-            # Ama çok tepede kalan levha uzaktır, karar üretmesin.
-            if m["bottom_ratio"] < self.sign_min_bottom_ratio:
-                continue
-
-            # Aşırı kenara yapışmış/kesilmiş false detection'ları azalt.
-            if not (0.02 <= m["cx_ratio"] <= 0.98):
-                continue
-
-            selected = dict(det)
-            selected.update({
-                "cx_ratio": round(float(m["cx_ratio"]), 4),
-                "cy_ratio": round(float(m["cy_ratio"]), 4),
-                "bottom_ratio": round(float(m["bottom_ratio"]), 4),
-                "area_ratio": round(float(m["area_ratio"]), 6),
-                "bbox_width_ratio": round(float(m["w_ratio"]), 4),
-                "bbox_height_ratio": round(float(m["h_ratio"]), 4),
-            })
-
-            center_score = 1.0 - min(1.0, abs(m["cx_ratio"] - 0.5) / 0.5)
-
-            if sign_type in self.stop_signs:
-                type_priority = 1.50
-            elif sign_type in self.slow_signs:
-                type_priority = 0.90
-            elif sign_type in self.speed_limit_map:
-                type_priority = 0.70
-            elif sign_type in self.warning_signs:
-                type_priority = 0.30
-            else:
-                type_priority = 0.10
-
-            score = (
-                sign_conf * 2.0
-                + yolo_conf
-                + m["bottom_ratio"] * 1.5
-                + min(m["area_ratio"] * 120.0, 1.5)
-                + center_score * self.sign_center_bonus
-                + type_priority
-            )
-
-            selected["active_sign_score"] = round(float(score), 4)
-            candidates.append((score, selected))
-
-        if not candidates:
-            return None
-
-        candidates.sort(key=lambda item: item[0], reverse=True)
-        return candidates[0][1]
-
-    def should_stop_for_stop_sign(self, active_sign):
-        """
-        DUR levhası için:
-        - İlk görüldüğünde belirli süre STOP üretir.
-        - Sonra cooldown süresince tekrar STOP üretmez.
-        Böylece araç levhayı gördüğü yerde sonsuza kadar kilitlenmez.
-        """
-        now = time.time()
-
-        if active_sign is None:
-            return False, "no_stop_sign"
-
-        sign_type = str(active_sign.get("sign_type", "unknown"))
-        # FAR_STOP_SIGN_FILTER:
-        # Logda araç çok uzakta, görüntünün üst kısmındaki minik/kararsız levhayı
-        # dur gibi okuyup gereksiz STOP üretti.
-        # DUR levhası ancak yakın/güvenilir/geometrik olarak yeterliyse STOP sayılır.
-        if sign_type == "dur":
-            try:
-                sign_conf = float(active_sign.get("sign_confidence", active_sign.get("confidence", 0.0)) or 0.0)
-            except Exception:
-                sign_conf = 0.0
-
-            try:
-                bottom_ratio = float(active_sign.get("bottom_ratio", 0.0) or 0.0)
-            except Exception:
-                bottom_ratio = 0.0
-
-            try:
-                area_ratio = float(active_sign.get("area_ratio", 0.0) or 0.0)
-            except Exception:
-                area_ratio = 0.0
-
-            # Bu eşikler özellikle false positive'i kesmek için:
-            # - logdaki yanlış dur levhası görüntünün üst/uzak bölgesindeydi
-            # - gerçek yakın DUR daha büyük ve daha aşağıda olur
-            if sign_conf < 0.55:
-                active_sign["stop_sign_rejected"] = "low_sign_conf"
-                active_sign["stop_sign_reject_detail"] = f"conf={sign_conf:.3f}<0.55"
-                return False, f"stop_sign_rejected_low_conf:dur:{sign_conf:.3f}"
-
-            if bottom_ratio < 0.32:
-                active_sign["stop_sign_rejected"] = "too_far_top"
-                active_sign["stop_sign_reject_detail"] = f"bottom={bottom_ratio:.3f}<0.32"
-                return False, f"stop_sign_rejected_too_far:dur:bottom={bottom_ratio:.3f}"
-
-            if area_ratio < 0.00045:
-                active_sign["stop_sign_rejected"] = "too_small"
-                active_sign["stop_sign_reject_detail"] = f"area={area_ratio:.6f}<0.00045"
-                return False, f"stop_sign_rejected_too_small:dur:area={area_ratio:.6f}"
-
-        if now < self.stop_sign_hold_until:
-            active_sign["stop_sign_state"] = "holding"
-            active_sign["stop_sign_hold_left_s"] = round(self.stop_sign_hold_until - now, 2)
-            return True, f"stop_sign_holding:{sign_type}"
-
-        if now < self.stop_sign_cooldown_until:
-            active_sign["stop_sign_state"] = "cooldown"
-            active_sign["stop_sign_cooldown_left_s"] = round(self.stop_sign_cooldown_until - now, 2)
-            return False, f"stop_sign_cooldown:{sign_type}"
-
-        self.last_stop_sign_type = sign_type
-        self.stop_sign_hold_until = now + self.stop_sign_hold_seconds
-        self.stop_sign_cooldown_until = (
-            now + self.stop_sign_hold_seconds + self.stop_sign_cooldown_seconds
-        )
-
-        active_sign["stop_sign_state"] = "new_stop"
-        active_sign["stop_sign_hold_left_s"] = round(self.stop_sign_hold_seconds, 2)
-        active_sign["stop_sign_cooldown_left_s"] = round(
-            self.stop_sign_hold_seconds + self.stop_sign_cooldown_seconds,
-            2,
-        )
-
-        return True, f"stop_sign_detected:{sign_type}"
 
     def get_person_risk(self, detections, frame_width, frame_height):
         persons = []
@@ -816,6 +1286,166 @@ class DecisionNode(Node):
         self.last_near_person = None
         return person_risk, active_person, False
 
+
+    def should_stop_for_stop_sign(self, active_sign):
+        """
+        STOP/DUR tabelası için konservatif karar + hold/cooldown.
+
+        Eski hata:
+        - stop_sign_hold_seconds / stop_sign_cooldown_seconds parametreleri tanımlıydı
+          ama pratikte kullanılmıyordu.
+        - Gerçek DUR tabelası kamerada kaldığında tekrar tekrar STOP üretebiliyordu.
+        """
+        if not active_sign:
+            return False, None
+
+        sign_type = str(
+            active_sign.get("traffic_sign_type")
+            or active_sign.get("sign_type")
+            or active_sign.get("type")
+            or ""
+        ).lower().strip()
+
+        if sign_type not in {"dur", "stop", "stop_sign"}:
+            return False, None
+
+        source = str(active_sign.get("source", "")).lower()
+        if "classifier_low_conf" in source:
+            return False, "stop_sign_rejected_low_classifier_conf"
+
+        try:
+            det_conf = float(active_sign.get("confidence", 0.0) or 0.0)
+        except Exception:
+            det_conf = 0.0
+
+        try:
+            sign_conf = float(
+                active_sign.get("sign_confidence")
+                or active_sign.get("traffic_sign_confidence")
+                or active_sign.get("classifier_confidence")
+                or det_conf
+                or 0.0
+            )
+        except Exception:
+            sign_conf = 0.0
+
+        if det_conf < 0.25:
+            return False, f"stop_sign_rejected_low_yolo_conf:{det_conf:.3f}"
+
+        if sign_conf < 0.55:
+            return False, f"stop_sign_rejected_low_sign_conf:{sign_conf:.3f}"
+
+        now = time.time()
+        same_stop = self.last_stop_sign_type in {"dur", "stop", "stop_sign"}
+
+        if same_stop and now < float(self.stop_sign_hold_until or 0.0):
+            return True, "stop_sign_hold_active"
+
+        if same_stop and now < float(self.stop_sign_cooldown_until or 0.0):
+            return False, "stop_sign_cooldown_active"
+
+        self.last_stop_sign_type = sign_type
+        self.stop_sign_hold_until = now + float(self.stop_sign_hold_seconds)
+        self.stop_sign_cooldown_until = self.stop_sign_hold_until + float(self.stop_sign_cooldown_seconds)
+
+        return True, "stop_sign_detected"
+
+
+
+    def _float_or_none(self, value):
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    def get_red_light_distance_context(self, tl):
+        """
+        Trafik ışığı mesafesinde ana kaynak sensör distance_m'dir.
+
+        Kurallar:
+        - distance_m / distance_est / tl_distance_m varsa direkt kullanılır.
+        - Memory decay yok.
+        - Bbox/area/bottom sensör mesafesini ezemez.
+        - Sensör yoksa distance_m None döner; bbox sadece fallback kararında kullanılır.
+        """
+        tl = tl or {}
+
+        raw_distance = self._float_or_none(
+            tl.get("distance_m") or tl.get("distance_est") or tl.get("tl_distance_m")
+        )
+        raw_source = str(tl.get("distance_source") or "none")
+
+        bottom_ratio = self._float_or_none(
+            tl.get("tl_bottom_ratio") or tl.get("bottom_ratio") or tl.get("bbox_bottom_ratio")
+        )
+        height_ratio = self._float_or_none(
+            tl.get("tl_height_ratio") or tl.get("height_ratio") or tl.get("bbox_height_ratio")
+        )
+        area_ratio = self._float_or_none(
+            tl.get("tl_area_ratio") or tl.get("area_ratio") or tl.get("bbox_area_ratio")
+        )
+
+        bbox = tl.get("bbox")
+        if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+            try:
+                x1, y1, x2, y2 = [float(x) for x in bbox[:4]]
+                if bottom_ratio is None:
+                    bottom_ratio = y2 / 360.0
+                if height_ratio is None:
+                    height_ratio = max(0.0, y2 - y1) / 360.0
+                if area_ratio is None:
+                    area_ratio = (
+                        max(0.0, x2 - x1)
+                        * max(0.0, y2 - y1)
+                        / (640.0 * 360.0)
+                    )
+            except Exception:
+                pass
+
+        stable_distance = None
+        source = "none"
+
+        if raw_distance is not None and 0.2 <= raw_distance <= 80.0:
+            stable_distance = float(raw_distance)
+            source = raw_source if raw_source and raw_source != "none" else "sensor_distance"
+
+            # Sadece debug için tutuyoruz. Karar mesafesi memory'den üretilmiyor.
+            self.last_red_distance_m = stable_distance
+            self.last_red_distance_time = time.time()
+            self.last_red_distance_source = source
+
+        else:
+            # SENSOR_HOLD_NO_DECAY:
+            # Depth anlık kaybolursa no_sensor_stop'a düşüp gereksiz STOP verme.
+            # Mesafeyi azaltmıyoruz/uydurmuyoruz; sadece son gerçek sensör mesafesini
+            # kısa süre koruyoruz.
+            try:
+                now = time.time()
+                last_d = getattr(self, "last_red_distance_m", None)
+                last_t = getattr(self, "last_red_distance_time", None)
+                last_src = getattr(self, "last_red_distance_source", "sensor_distance")
+
+                if last_d is not None and last_t is not None:
+                    age = now - float(last_t)
+                    if 0.0 <= age <= 1.5 and 0.2 <= float(last_d) <= 80.0:
+                        stable_distance = float(last_d)
+                        raw_distance = float(last_d)
+                        source = f"recent_sensor_hold:{last_src},age={age:.1f}"
+            except Exception:
+                pass
+
+        return {
+            "distance_m": stable_distance,
+            "raw_distance_m": raw_distance,
+            "distance_source": source,
+            "raw_distance_source": raw_source,
+            "bottom_ratio": bottom_ratio,
+            "height_ratio": height_ratio,
+            "area_ratio": area_ratio,
+        }
+
     def build_rule_decision(
         self,
         vehicle_rule,
@@ -825,6 +1455,7 @@ class DecisionNode(Node):
         person_risk,
         active_person,
         person_hold_active,
+        route_intent=None,
     ):
         active_sign_type = None
         active_sign_name = None
@@ -837,13 +1468,139 @@ class DecisionNode(Node):
             self.current_speed_limit = self.speed_limit_map[active_sign_type]
             self.last_speed_limit_sign = active_sign_type
 
-        # Öncelik 1: kırmızı ışık / dur levhası / yakın yaya / çok yakın engel.
+        route_wait, route_wait_reason = self.route_intent_requires_wait(route_intent)
+
+        # Öncelik 1: kırmızı ışık / dur levhası / yakın yaya / rota kısıtı / çok yakın engel.
         if traffic_light_state == "red":
+            self._qualified_green_count = 0
+            tl = traffic_light_det or {}
+            ctx = self.get_red_light_distance_context(tl)
+
+            bottom_ratio = ctx["bottom_ratio"]
+            height_ratio = ctx["height_ratio"]
+            area_ratio = ctx["area_ratio"]
+            distance_m = ctx["distance_m"]
+            raw_distance_m = ctx["raw_distance_m"]
+            distance_source = ctx["distance_source"]
+
+            stopline_distance_m = None
+            if distance_m is not None and distance_m > 0.0:
+                stopline_distance_m = max(
+                    0.0,
+                    float(distance_m) - float(self.tl_red_stop_offset_m),
+                )
+
+            reason_suffix = (
+                f"b={bottom_ratio if bottom_ratio is not None else -1:.3f},"
+                f"h={height_ratio if height_ratio is not None else -1:.3f},"
+                f"a={area_ratio if area_ratio is not None else -1:.6f},"
+                f"d={distance_m if distance_m is not None else -1:.1f},"
+                f"raw={raw_distance_m if raw_distance_m is not None else -1:.1f},"
+                f"sd={stopline_distance_m if stopline_distance_m is not None else -1:.1f},"
+                f"src={distance_source}"
+            )
+
+            # 1) Sensör mesafesi varsa SADECE sensör mesafesine göre karar ver.
+            # Bbox/visual/memory hiçbir şekilde sensör mesafesini ezemez.
+            if stopline_distance_m is not None:
+                if stopline_distance_m <= self.tl_red_stop_distance_m:
+                    return {
+                        "decision": "STOP",
+                        "risk": "HIGH",
+                        "target_speed": self.stop_speed,
+                        "reason": f"red_light_sensor_stop:{reason_suffix}",
+                    }
+
+                if stopline_distance_m <= self.tl_red_crawl_distance_m:
+                    return {
+                        "decision": "SLOW",
+                        "risk": "HIGH",
+                        "target_speed": min(float(self.creep_speed), 1.20),
+                        "reason": f"red_light_sensor_crawl:{reason_suffix}",
+                    }
+
+                if stopline_distance_m <= self.tl_red_slow_distance_m:
+                    return {
+                        "decision": "SLOW",
+                        "risk": "HIGH",
+                        "target_speed": min(float(self.slow_speed), 2.78),
+                        "reason": f"red_light_sensor_slow:{reason_suffix}",
+                    }
+
+                return {
+                    "decision": "SLOW",
+                    "risk": "HIGH",
+                    "target_speed": min(float(self.default_go_speed), float(self.tl_red_far_approach_speed)),
+                    "reason": f"red_light_sensor_far_slow:{reason_suffix}",
+                }
+
+            # 2) Sensör yoksa bbox fallback.
+            # STOP için hem görüntüde aşağıda olmalı hem boyut yeterli olmalı.
+            near_by_bottom = (
+                bottom_ratio is not None
+                and bottom_ratio >= self.tl_red_no_distance_stop_bottom_ratio
+            )
+            near_by_size = (
+                (height_ratio is not None and height_ratio >= self.tl_red_no_distance_stop_height_ratio)
+                or (area_ratio is not None and area_ratio >= self.tl_red_no_distance_stop_area_ratio)
+            )
+            strong_visual_crawl = (
+                (height_ratio is not None and height_ratio >= 0.052)
+                or (area_ratio is not None and area_ratio >= 0.00050)
+            )
+
+            # Sensör yoksa ve kırmızı ışık görüntüde belirgin/yakın hale geldiyse
+            # artık crawl ile geçmeye devam etme; STOP ver.
+            #
+            # Logdaki ihlal örneği:
+            #   b=0.083,h=0.083,a=0.001207,d=-1,src=none
+            # Eski kod bunu red_light_no_sensor_crawl_visual yapıp 4 km/h ile geçirdi.
+            no_sensor_overhead_or_near_stop = (
+                (
+                    height_ratio is not None
+                    and area_ratio is not None
+                    and height_ratio >= 0.060
+                    and area_ratio >= 0.00070
+                )
+                or (
+                    height_ratio is not None
+                    and height_ratio >= 0.074
+                )
+                or (
+                    area_ratio is not None
+                    and area_ratio >= 0.00100
+                )
+            )
+
+            if near_by_bottom and near_by_size:
+                return {
+                    "decision": "STOP",
+                    "risk": "HIGH",
+                    "target_speed": self.stop_speed,
+                    "reason": f"red_light_no_sensor_stop:{reason_suffix}",
+                }
+
+            if no_sensor_overhead_or_near_stop:
+                return {
+                    "decision": "STOP",
+                    "risk": "HIGH",
+                    "target_speed": self.stop_speed,
+                    "reason": f"red_light_no_sensor_overhead_stop:{reason_suffix}",
+                }
+
+            if strong_visual_crawl:
+                return {
+                    "decision": "SLOW",
+                    "risk": "HIGH",
+                    "target_speed": min(float(self.creep_speed), 1.20),
+                    "reason": f"red_light_no_sensor_crawl_visual:{reason_suffix}",
+                }
+
             return {
-                "decision": "STOP",
+                "decision": "SLOW",
                 "risk": "HIGH",
-                "target_speed": self.stop_speed,
-                "reason": "red_light_detected",
+                "target_speed": min(float(self.default_go_speed), float(self.tl_red_far_approach_speed)),
+                "reason": f"red_light_no_sensor_far_slow:{reason_suffix}",
             }
 
         if active_sign_type in self.stop_signs:
@@ -864,11 +1621,20 @@ class DecisionNode(Node):
                 "reason": "near_person_hold" if person_hold_active else "near_person_in_path",
             }
 
+        if route_wait:
+            return {
+                "decision": "STOP",
+                "risk": "HIGH",
+                "target_speed": self.stop_speed,
+                "reason": f"route_constraint_wait:{route_wait_reason}",
+            }
+
         if vehicle_rule["decision"] == "STOP":
             return vehicle_rule
 
         # Öncelik 2: sarı ışık, yavaş levhası, yol koridorunda uzak yaya, yakın araç.
         if traffic_light_state == "yellow":
+            self._qualified_green_count = 0
             if self.yellow_as_slow:
                 return {
                     "decision": "SLOW",
@@ -915,7 +1681,7 @@ class DecisionNode(Node):
 
         # Hız limiti varsa uygula.
         # hiz_siniri_30 => target_speed_kmh=30.0, target_speed=8.33 m/s.
-        if self.current_speed_limit is not None:
+        if self.current_speed_limit is not None and traffic_light_state != "green":
             return {
                 "decision": "GO",
                 "risk": "LOW",
@@ -932,11 +1698,115 @@ class DecisionNode(Node):
             }
 
         if traffic_light_state == "green":
+            # Green release çok sıkı:
+            # Tek frame / düşük detection confidence / küçük bbox ile araç kalkmayacak.
+            tl = traffic_light_det or {}
+
+            def _float_or_none(v):
+                try:
+                    if v is None:
+                        return None
+                    return float(v)
+                except Exception:
+                    return None
+
+            state_conf = _float_or_none(
+                tl.get("traffic_light_state_confidence")
+                or tl.get("state_confidence")
+                or tl.get("state_conf")
+            )
+            det_conf = _float_or_none(
+                tl.get("det_confidence")
+                or tl.get("detection_confidence")
+                or tl.get("confidence")
+            )
+            area_ratio = _float_or_none(
+                tl.get("tl_area_ratio")
+                or tl.get("area_ratio")
+                or tl.get("bbox_area_ratio")
+            )
+            height_ratio = _float_or_none(
+                tl.get("tl_height_ratio")
+                or tl.get("height_ratio")
+                or tl.get("bbox_height_ratio")
+            )
+            distance_m = _float_or_none(
+                tl.get("distance_m")
+                or tl.get("distance_est")
+                or tl.get("tl_distance_m")
+            )
+
+            bbox = tl.get("bbox")
+            if isinstance(bbox, (list, tuple)) and len(bbox) >= 4:
+                try:
+                    x1, y1, x2, y2 = [float(x) for x in bbox[:4]]
+                    if height_ratio is None:
+                        height_ratio = max(0.0, y2 - y1) / 360.0
+                    if area_ratio is None:
+                        area_ratio = (
+                            max(0.0, x2 - x1)
+                            * max(0.0, y2 - y1)
+                            / (640.0 * 360.0)
+                        )
+                except Exception:
+                    pass
+
+            reject_reasons = []
+
+            if det_conf is None or det_conf < self.tl_green_release_min_det_conf:
+                reject_reasons.append(f"det={det_conf if det_conf is not None else -1:.3f}")
+
+            if state_conf is None or state_conf < self.tl_green_release_min_state_conf:
+                reject_reasons.append(f"state={state_conf if state_conf is not None else -1:.3f}")
+
+            if area_ratio is None or area_ratio < self.tl_green_release_min_area_ratio:
+                reject_reasons.append(f"area={area_ratio if area_ratio is not None else -1:.6f}")
+
+            if height_ratio is None or height_ratio < self.tl_green_release_min_height_ratio:
+                reject_reasons.append(f"h={height_ratio if height_ratio is not None else -1:.3f}")
+
+            if (
+                distance_m is not None
+                and distance_m > 0.0
+                and distance_m > self.tl_green_release_max_distance_m
+            ):
+                reject_reasons.append(f"d={distance_m:.1f}")
+
+            if reject_reasons:
+                self._qualified_green_count = 0
+                return {
+                    "decision": "STOP",
+                    "risk": "HIGH",
+                    "target_speed": self.stop_speed,
+                    "reason": "green_rejected_wait_for_stable_green:" + ",".join(reject_reasons),
+                }
+
+            self._qualified_green_count = int(getattr(self, "_qualified_green_count", 0)) + 1
+
+            if self._qualified_green_count < self.tl_green_release_min_count:
+                return {
+                    "decision": "STOP",
+                    "risk": "HIGH",
+                    "target_speed": self.stop_speed,
+                    "reason": (
+                        f"green_wait_stable:"
+                        f"{self._qualified_green_count}/{self.tl_green_release_min_count}"
+                    ),
+                }
+
+            self.red_light_latch_until = 0.0
+            self.red_light_latch_info = None
+            self.red_light_green_seen_count = 0
+            self.red_light_first_seen_time = 0.0
+            self.last_red_distance_m = None
+            self.last_red_distance_time = 0.0
+            self.last_red_distance_source = None
+
             return {
                 "decision": "GO",
                 "risk": "LOW",
                 "target_speed": self.default_go_speed,
-                "reason": "green_light_detected",
+                "reason": "green_light_confirmed_stable",
             }
 
         return vehicle_rule
@@ -953,6 +1823,24 @@ class DecisionNode(Node):
         age = now - self.last_output_time
 
         if prev_decision == "STOP" and output["decision"] != "STOP":
+            prev_reason = str(self.last_output.get("reason", ""))
+            current_reason = str(output.get("reason", ""))
+            current_tl = str(output.get("traffic_light_state", "unknown")).lower().strip()
+
+            if "route_constraint_wait" in prev_reason and output.get("decision") != "STOP":
+                self.last_output_time = now
+                self.last_output = dict(output)
+                return output
+
+            if (
+                self.tl_green_release_bypass_hold
+                and "red_light_" in prev_reason
+                and "green_light_confirmed_stable" in current_reason
+            ):
+                self.last_output_time = now
+                self.last_output = dict(output)
+                return output
+
             if age < self.stop_hold_seconds:
                 held = dict(output)
                 held["decision"] = "STOP"
@@ -991,10 +1879,61 @@ class DecisionNode(Node):
         front_vehicle, used_memory = self.apply_front_vehicle_memory(front_vehicle)
         vehicle_rule = self.evaluate_vehicle_rule(front_vehicle, used_memory)
 
-        traffic_light_state, traffic_light_det = self.select_active_traffic_light(
-            detections,
+        # CLEAN_TL_SINGLE_SOURCE:
+        # Trafik ışığında tek karar kaynağı perception'ın aynı frame içinde seçtiği
+        # active traffic-light decision_event olmalı. Raw detections içinden tekrar
+        # aktif ışık seçmek ve priority_red override yapmak, uzaktaki/yan taraftaki
+        # kırmızının yeşili ezmesine sebep oluyordu.
+        decision_events = data.get("decision_events", [])
+        if not isinstance(decision_events, list):
+            decision_events = []
+
+        # Geriye uyumluluk/debug için topic fallback kalsın; ama normal akışta
+        # aynı detections_json frame'i içindeki decision_events kullanılır.
+        if not decision_events:
+            decision_events = self.get_fresh_decision_events()
+
+        traffic_light_state, traffic_light_det = self.select_traffic_light_from_decision_events(
+            decision_events,
             frame_width,
             frame_height,
+        )
+
+        # Eğer aynı frame payload içinde aktif ışık varsa, decision_events kaçsa bile
+        # perception'ın seçtiği aktif ışığı kullan. Burada tekrar geometry gate yapmıyoruz;
+        # aksi halde gerçek küçük kırmızı decision tarafında unknown'a düşüyor.
+        if traffic_light_state == "unknown":
+            payload_tl_state = str(data.get("traffic_light_state", "unknown")).lower().strip()
+            if payload_tl_state in {"red", "yellow", "green"}:
+                try:
+                    payload_state_conf = float(data.get("traffic_light_state_confidence") or 0.0)
+                except Exception:
+                    payload_state_conf = 0.0
+
+                try:
+                    payload_det_conf = float(data.get("traffic_light_confidence") or 0.0)
+                except Exception:
+                    payload_det_conf = 0.0
+
+                candidate = {
+                    "label": "traffic_light",
+                    "traffic_light_state": payload_tl_state,
+                    "state_confidence": payload_state_conf,
+                    "traffic_light_state_confidence": payload_state_conf,
+                    "confidence": payload_det_conf,
+                    "bbox": data.get("traffic_light_active_bbox"),
+                    "traffic_light_state_source": data.get("traffic_light_state_source"),
+                    "traffic_light_color_reason": data.get("traffic_light_color_reason"),
+                    "traffic_light_geometry_gate": "trusted_perception_payload_active_tl",
+                    "selected_by": "perception_payload_active_tl",
+                }
+
+                traffic_light_state = payload_tl_state
+                traffic_light_det = candidate
+
+        traffic_light_state, traffic_light_det = self.apply_red_light_latch(
+            traffic_light_state,
+            traffic_light_det,
         )
 
         active_sign = self.get_best_sign(detections, frame_width, frame_height)
@@ -1010,6 +1949,8 @@ class DecisionNode(Node):
             raw_active_person,
         )
 
+        route_intent = self.get_fresh_route_intent()
+
         final_rule = self.build_rule_decision(
             vehicle_rule=vehicle_rule,
             traffic_light_state=traffic_light_state,
@@ -1018,6 +1959,7 @@ class DecisionNode(Node):
             person_risk=person_risk,
             active_person=active_person,
             person_hold_active=person_hold_active,
+            route_intent=route_intent,
         )
 
         distance_est = vehicle_rule.get("distance_est", None)
@@ -1035,12 +1977,21 @@ class DecisionNode(Node):
             "front_vehicle": front_vehicle,
             "traffic_light_state": traffic_light_state,
             "traffic_light": traffic_light_det,
+            "red_light_latch_active": bool(time.time() < float(self.red_light_latch_until or 0.0)),
+            "red_light_latch_left_s": round(
+                max(0.0, float(self.red_light_latch_until or 0.0) - time.time()),
+                2,
+            ),
             "active_sign": active_sign,
             "person_risk": person_risk,
             "raw_person_risk": raw_person_risk,
             "person_hold_active": person_hold_active,
             "active_person": active_person,
             "speed_limit_active": self.last_speed_limit_sign,
+            "decision_events": decision_events,
+            "route_intent": route_intent,
+            "route_decision_status": route_intent.get("route_decision_status") if isinstance(route_intent, dict) else None,
+            "route_decision_reason": route_intent.get("route_decision_reason") if isinstance(route_intent, dict) else None,
             "reason": final_rule["reason"],
             "debug_policy": {
                 "path_x_center": self.path_x_center,
@@ -1073,6 +2024,11 @@ class DecisionNode(Node):
         sign_type = active_sign.get("sign_type") if active_sign else None
 
         speed_limit_kmh = output.get("speed_limit_active_kmh")
+        route_status = output.get("route_decision_status")
+        route_reason = output.get("route_decision_reason")
+        route_maneuver = None
+        if isinstance(output.get("route_intent"), dict):
+            route_maneuver = output["route_intent"].get("route_intent")
 
         light_conf = None
         if traffic_light:
@@ -1092,6 +2048,7 @@ class DecisionNode(Node):
             f"TRAFFIC SIGN    : {sign_name} | type={sign_type}\n"
             f"PERSON RISK     : {output.get('person_risk')} | conf={person_conf} | x={person_x} | bottom={person_bottom} | in_path={person_in_path}\n"
             f"SPEED LIMIT     : {output.get('speed_limit_active')} | {speed_limit_kmh} km/h\n"
+            f"ROUTE INTENT    : {route_maneuver} | status={route_status} | reason={route_reason}\n"
             "===================================================\n"
         )
 

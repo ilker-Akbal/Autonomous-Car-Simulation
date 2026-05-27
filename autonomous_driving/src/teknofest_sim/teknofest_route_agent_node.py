@@ -41,6 +41,9 @@ class TeknofestRouteAgentNode(Node):
         self.declare_parameter("target_speed_smoothing_enabled", True)
         self.declare_parameter("target_speed_accel_limit_mps2", 1.8)
         self.declare_parameter("target_speed_decel_limit_mps2", 3.0)
+        self.declare_parameter("green_release_min_start_speed_mps", 3.0)
+        self.declare_parameter("red_light_hard_stop_enabled", True)
+        self.declare_parameter("red_light_hard_stop_handbrake_below_mps", 0.20)
 
         self.declare_parameter("debug_topic", "/adas/teknofest/route_agent_debug")
         self.declare_parameter("collision_topic", "/adas/events/collision")
@@ -124,6 +127,15 @@ class TeknofestRouteAgentNode(Node):
         )
         self.target_speed_decel_limit_mps2 = float(
             self.get_parameter("target_speed_decel_limit_mps2").value
+        )
+        self.green_release_min_start_speed_mps = float(
+            self.get_parameter("green_release_min_start_speed_mps").value
+        )
+        self.red_light_hard_stop_enabled = bool(
+            self.get_parameter("red_light_hard_stop_enabled").value
+        )
+        self.red_light_hard_stop_handbrake_below_mps = float(
+            self.get_parameter("red_light_hard_stop_handbrake_below_mps").value
         )
         self.last_smoothed_target_speed_mps = None
         self.last_smoothed_target_time = 0.0
@@ -523,6 +535,13 @@ class TeknofestRouteAgentNode(Node):
         dt = now - float(self.last_smoothed_target_time or now)
         dt = self.clamp(dt, 0.02, 0.20)
         prev = float(self.last_smoothed_target_speed_mps)
+
+        if ("green_light_detected" in str(reason) or "green_light_confirmed_stable" in str(reason)) and prev <= 0.05 and target_speed > 0.10:
+            kickoff = min(target_speed, max(float(self.green_release_min_start_speed_mps), target_speed * 0.35))
+            self.last_smoothed_target_speed_mps = kickoff
+            self.last_smoothed_target_time = now
+            reason = f"{reason}|green_release_smoothing_bypass:{kickoff:.2f}"
+            return kickoff, reason
 
         if target_speed > prev:
             max_step = max(0.05, float(self.target_speed_accel_limit_mps2) * dt)
@@ -942,37 +961,59 @@ class TeknofestRouteAgentNode(Node):
 
         return True
 
-    def hard_stop_control(self):
-        control = self.carla.VehicleControl()
-        control.throttle = 0.0
-        control.brake = 1.0
-        control.steer = 0.0
-        control.hand_brake = False
-        control.manual_gear_shift = False
-        return control
-
     def smooth_stop_control(self, reason=""):
         """
-        Normal STOP durumunda brake=1.0 aracı zıplatıyor.
-        Collision gibi acil durumda hard_stop ayrı kalıyor.
-        Trafik ışığı / karar duruşunda hızla orantılı daha kontrollü fren yapıyoruz.
-        """
-        speed = self.get_speed()
+        STOP / hard-stop durumları için güvenli kontrol üretir.
 
-        control = self.carla.VehicleControl()
+        Bu metod daha önce tick() içinde çağrılıyordu ama dosyada yoktu.
+        Eksik olduğu için route_agent crash oluyor ve araç komut alamıyordu.
+        """
+        try:
+            import carla
+            control = carla.VehicleControl()
+        except Exception:
+            # CARLA import beklenmedik şekilde yoksa yine de crash etme.
+            class _Control:
+                pass
+            control = _Control()
+
+        text = str(reason or "").lower()
+        red_stop = "red_light_" in text and (
+            "stop" in text
+            or "visual_stop" in text
+            or "no_distance_bottom" in text
+        )
+
+        prev_brake = float(getattr(self, "last_brake_cmd", 0.0) or 0.0)
+        prev_steer = float(getattr(self, "last_steer_cmd", 0.0) or 0.0)
+
         control.throttle = 0.0
-        control.steer = 0.0
+        control.steer = self.clamp(prev_steer, -0.35, 0.35)
+
+        if red_stop:
+            # Kırmızı STOP ise gecikmesiz net fren.
+            control.brake = 1.0
+        else:
+            # Genel STOP için yumuşak ama kararlı fren.
+            control.brake = self.clamp(prev_brake + 0.18, 0.25, 1.0)
+
         control.hand_brake = False
         control.manual_gear_shift = False
 
-        if speed < 0.25:
-            control.brake = 1.0
-            return control
+        self.last_throttle_cmd = 0.0
+        self.last_brake_cmd = float(control.brake)
+        self.last_steer_cmd = float(control.steer)
 
-        # 18 km/h civarında ~0.60, düşük hızda ~0.28.
-        brake = 0.22 + 0.075 * float(speed)
-        control.brake = self.clamp(brake, 0.25, 0.65)
         return control
+
+
+    def is_red_light_stop_reason(self, reason):
+        text = str(reason or "").lower()
+        return "red_light_" in text and (
+            "stop" in text
+            or "visual_stop" in text
+            or "no_distance_bottom" in text
+        )
 
     def resolve_target_speed(self):
         now = time.time()
@@ -1016,7 +1057,18 @@ class TeknofestRouteAgentNode(Node):
             decision_speed = self.slow_speed_mps if decision == "SLOW" else self.go_speed_mps
 
         if decision == "SLOW":
-            target_speed = min(float(decision_speed), float(self.slow_speed_mps))
+            raw_reason_l = str(raw_reason or "").lower()
+
+            # red_light_sensor_far_slow decision tarafında 20 km/h yaklaşma demek.
+            # Eski kod bütün SLOW kararlarını slow_speed_mps=10 km/h ile kırpıyordu.
+            if (
+                "red_light_sensor_far_slow" in raw_reason_l
+                or "red_light_no_sensor_far_slow" in raw_reason_l
+            ):
+                target_speed = float(decision_speed)
+            else:
+                target_speed = min(float(decision_speed), float(self.slow_speed_mps))
+
             return self.clamp(target_speed, 0.0, self.max_speed_mps), (
                 f"driver_only_decision_slow:{raw_reason}|{speed_reason}"
             )
@@ -1031,7 +1083,12 @@ class TeknofestRouteAgentNode(Node):
         target_speed, reason = self.resolve_target_speed()
 
         target_speed, reason = self.apply_planner_speed_hint_cap(target_speed, reason)
-        target_speed, reason = self.apply_target_speed_smoothing(target_speed, reason)
+
+        red_light_control = "red_light_" in str(reason).lower()
+        # Kırmızı ışıkta hedef hız düşüşünü geciktirme.
+        # Aksi halde 20 km/h -> 10 km/h -> 0 geçişi çok geç oluyor.
+        if not red_light_control:
+            target_speed, reason = self.apply_target_speed_smoothing(target_speed, reason)
 
         current_speed = self.get_speed()
 
@@ -1040,7 +1097,14 @@ class TeknofestRouteAgentNode(Node):
             reason = "collision_halt"
             target_speed = 0.0
         elif target_speed <= 0.01:
-            control = self.smooth_stop_control(reason)
+            if self.red_light_hard_stop_enabled and self.is_red_light_stop_reason(reason):
+                control = self.hard_stop_control()
+                if current_speed <= self.red_light_hard_stop_handbrake_below_mps:
+                    control.hand_brake = True
+                self.reset_longitudinal_memory()
+                reason = f"{reason}|red_light_hard_stop"
+            else:
+                control = self.smooth_stop_control(reason)
         else:
             ok = self.set_agent_destination_if_needed()
             if not ok:
@@ -1076,16 +1140,51 @@ class TeknofestRouteAgentNode(Node):
                 desired_throttle = 0.0
                 desired_brake = 0.0
 
-                if speed_error > 0.20:
-                    desired_throttle = 0.22 + 0.42 * speed_error
-                    desired_throttle = self.clamp(desired_throttle, 0.20, 0.90)
+                reason_l = str(reason or "").lower()
+                red_light_control = "red_light_" in reason_l
+                red_light_stop_control = self.is_red_light_stop_reason(reason)
+                red_light_approach_control = red_light_control and not red_light_stop_control
+
+                if red_light_stop_control:
+                    desired_throttle = 0.0
+                    desired_brake = self.clamp(0.12 + 0.18 * max(0.0, overspeed), 0.10, 0.60)
+
+                elif speed_error > 0.20:
+                    if red_light_approach_control:
+                        # Kırmızı yaklaşma modlarında gaz tamamen kesilmez.
+                        # far_slow/sensor_slow/crawl ayrı davranır.
+                        if "crawl" in reason_l:
+                            desired_throttle = 0.10 + 0.20 * speed_error
+                            desired_throttle = self.clamp(desired_throttle, 0.08, 0.28)
+                        elif "sensor_slow" in reason_l or "no_sensor_slow" in reason_l:
+                            desired_throttle = 0.14 + 0.26 * speed_error
+                            desired_throttle = self.clamp(desired_throttle, 0.10, 0.42)
+                        else:
+                            desired_throttle = 0.18 + 0.32 * speed_error
+                            desired_throttle = self.clamp(desired_throttle, 0.12, 0.55)
+                    else:
+                        desired_throttle = 0.22 + 0.42 * speed_error
+                        desired_throttle = self.clamp(desired_throttle, 0.20, 0.90)
+
                     desired_brake = 0.0
+
+                elif red_light_control and overspeed > 0.10:
+                    desired_throttle = 0.0
+                    desired_brake = self.clamp(0.08 + 0.16 * overspeed, 0.08, 0.45)
+
                 elif overspeed <= 0.95:
-                    desired_throttle = 0.018 if current_speed < target_speed else 0.0
+                    if current_speed < target_speed:
+                        desired_throttle = 0.030 if red_light_approach_control else 0.018
+                    else:
+                        desired_throttle = 0.0
                     desired_brake = 0.0
+
                 else:
                     desired_throttle = 0.0
-                    desired_brake = self.clamp(0.05 * (overspeed - 0.95), 0.0, 0.035)
+                    if red_light_control:
+                        desired_brake = self.clamp(0.10 + 0.10 * (overspeed - 0.20), 0.08, 0.45)
+                    else:
+                        desired_brake = self.clamp(0.05 * (overspeed - 0.95), 0.0, 0.035)
 
                 def _slew(cur, dst, step):
                     cur = float(cur)
@@ -1098,7 +1197,12 @@ class TeknofestRouteAgentNode(Node):
                     return cur
 
                 throttle_cmd = _slew(self.last_throttle_cmd, desired_throttle, 0.160)
-                brake_cmd = _slew(self.last_brake_cmd, desired_brake, 0.018)
+                red_light_control = "red_light_" in str(reason).lower()
+                brake_cmd = _slew(
+                    self.last_brake_cmd,
+                    desired_brake,
+                    0.060 if red_light_control else 0.018,
+                )
 
                 if brake_cmd > 0.001:
                     throttle_cmd = 0.0
@@ -1107,7 +1211,12 @@ class TeknofestRouteAgentNode(Node):
                 self.last_brake_cmd = brake_cmd
 
                 control.throttle = self.clamp(throttle_cmd, 0.0, 0.90)
-                control.brake = self.clamp(brake_cmd, 0.0, 0.035)
+                red_light_control = "red_light_" in str(reason).lower()
+                control.brake = self.clamp(
+                    brake_cmd,
+                    0.0,
+                    0.45 if red_light_control else 0.035,
+                )
                 control.hand_brake = False
                 control.manual_gear_shift = False
 
@@ -1115,6 +1224,40 @@ class TeknofestRouteAgentNode(Node):
         try:
             control.throttle = self.clamp(control.throttle, 0.0, 0.90)
             control.steer = self.clamp(control.steer, -self.max_steer, self.max_steer)
+        except Exception:
+            pass
+
+        # GO kararı var ama araç duruyorsa BasicAgent bazen ilk kalkışta throttle=0/brake>0 bırakıyor.
+        # Kırmızı/STOP yoksa freni temizle ve kalkış gazı ver.
+        try:
+            reason_l = str(reason or "").lower()
+            red_approach_bootstrap = (
+                "red_light_" in reason_l
+                and not self.is_red_light_stop_reason(reason)
+                and "decision_slow" in reason_l
+            )
+
+            if (
+                float(target_speed) > 0.30
+                and float(current_speed) < 0.20
+                and ("decision_go" in reason_l or red_approach_bootstrap)
+                and "timeout" not in reason_l
+            ):
+                if red_approach_bootstrap:
+                    if "crawl" in reason_l:
+                        min_start_throttle = 0.14
+                    else:
+                        min_start_throttle = 0.26
+                    tag = "standstill_red_approach_bootstrap"
+                else:
+                    min_start_throttle = 0.38
+                    tag = "standstill_go_bootstrap"
+
+                control.throttle = max(float(getattr(control, "throttle", 0.0) or 0.0), min_start_throttle)
+                control.brake = 0.0
+                reason = str(reason) + "|" + tag
+                self.last_throttle_cmd = float(control.throttle)
+                self.last_brake_cmd = 0.0
         except Exception:
             pass
 

@@ -9,6 +9,11 @@ from rclpy.node import Node
 from std_msgs.msg import String
 
 from teknofest_sim.carla_loader import load_carla
+from teknofest_sim.sign_semantics import (
+    constraint_blocks_maneuver,
+    road_option_to_maneuver,
+    summarize_constraints_for_log,
+)
 
 
 class GlobalRoutePlannerNode(Node):
@@ -47,6 +52,10 @@ class GlobalRoutePlannerNode(Node):
         self.declare_parameter("global_route_topic", "/adas/planning/global_route")
         self.declare_parameter("local_target_topic", "/adas/planning/local_target")
         self.declare_parameter("debug_topic", "/adas/planning/route_debug")
+        self.declare_parameter("route_constraints_topic", "/adas/perception/route_constraints_json")
+        self.declare_parameter("route_intent_topic", "/adas/planning/route_intent")
+        self.declare_parameter("route_constraint_timeout_s", 2.5)
+        self.declare_parameter("route_constraint_block_on_violation", False)
 
         self.declare_parameter("route_resolution_m", 2.0)
         self.declare_parameter("lookahead_m", 20.0)
@@ -74,6 +83,10 @@ class GlobalRoutePlannerNode(Node):
         self.global_route_topic = str(self.get_parameter("global_route_topic").value)
         self.local_target_topic = str(self.get_parameter("local_target_topic").value)
         self.debug_topic = str(self.get_parameter("debug_topic").value)
+        self.route_constraints_topic = str(self.get_parameter("route_constraints_topic").value)
+        self.route_intent_topic = str(self.get_parameter("route_intent_topic").value)
+        self.route_constraint_timeout_s = float(self.get_parameter("route_constraint_timeout_s").value)
+        self.route_constraint_block_on_violation = bool(self.get_parameter("route_constraint_block_on_violation").value)
 
         self.route_resolution_m = float(self.get_parameter("route_resolution_m").value)
         self.lookahead_m = float(self.get_parameter("lookahead_m").value)
@@ -123,12 +136,17 @@ class GlobalRoutePlannerNode(Node):
         self.last_replan_time = 0.0
         self.last_global_publish_time = 0.0
         self.last_local_payload = None
+        self.latest_route_constraints = []
+        self.last_route_constraints_time = 0.0
+        self.last_route_intent_payload = None
 
         self.global_route_pub = self.create_publisher(String, self.global_route_topic, 10)
         self.local_target_pub = self.create_publisher(String, self.local_target_topic, 10)
+        self.route_intent_pub = self.create_publisher(String, self.route_intent_topic, 10)
         self.debug_pub = self.create_publisher(String, self.debug_topic, 10)
 
         self.create_subscription(String, self.mission_topic, self.mission_cb, 10)
+        self.create_subscription(String, self.route_constraints_topic, self.route_constraints_cb, 10)
 
         period = 1.0 / max(1.0, self.local_target_rate_hz)
         self.timer = self.create_timer(period, self.tick)
@@ -136,7 +154,7 @@ class GlobalRoutePlannerNode(Node):
         self.get_logger().info(
             f"GlobalRoutePlannerNode hazır: map={self.map.name} "
             f"mission={self.mission_topic} global={self.global_route_topic} "
-            f"local={self.local_target_topic}"
+            f"local={self.local_target_topic} route_constraints={self.route_constraints_topic} route_intent={self.route_intent_topic}"
         )
 
     def add_python_api_paths(self):
@@ -174,6 +192,174 @@ class GlobalRoutePlannerNode(Node):
             self.last_mission_time = time.time()
         except Exception as exc:
             self.get_logger().warning(f"Mission parse hatası: {exc}")
+
+    def route_constraints_cb(self, msg):
+        try:
+            data = json.loads(msg.data)
+            constraints = data.get("constraints", [])
+            if not isinstance(constraints, list):
+                constraints = []
+
+            self.latest_route_constraints = constraints
+            self.last_route_constraints_time = time.time()
+
+            if constraints:
+                self.get_logger().info(
+                    "ROUTE_CONSTRAINTS_RX "
+                    + json.dumps(summarize_constraints_for_log(constraints[:5]), ensure_ascii=False),
+                    throttle_duration_sec=0.5,
+                )
+
+        except Exception as exc:
+            self.get_logger().warning(f"Route constraint parse hatası: {exc}")
+
+    def fresh_route_constraints(self):
+        if not self.latest_route_constraints:
+            return []
+
+        age = time.time() - float(self.last_route_constraints_time or 0.0)
+        if age > self.route_constraint_timeout_s:
+            return []
+
+        filtered = []
+        for constraint in self.latest_route_constraints:
+            if not isinstance(constraint, dict):
+                continue
+
+            try:
+                conf = float(constraint.get("confidence", 0.0) or 0.0)
+            except Exception:
+                conf = 0.0
+            if conf < 0.45:
+                continue
+
+            metrics = constraint.get("metrics") or {}
+            try:
+                area_ratio = float(constraint.get("area_ratio", metrics.get("area_ratio", 0.0)) or 0.0)
+                bottom_ratio = float(constraint.get("bottom_ratio", metrics.get("bottom_ratio", 0.0)) or 0.0)
+            except Exception:
+                area_ratio, bottom_ratio = 0.0, 0.0
+
+            if area_ratio < 0.00020 or bottom_ratio < 0.16:
+                continue
+
+            distance_m = constraint.get("distance_m") or constraint.get("distance_est")
+            try:
+                distance_m = float(distance_m) if distance_m is not None else None
+            except Exception:
+                distance_m = None
+
+            if distance_m is not None and distance_m > 35.0:
+                continue
+
+            try:
+                stable_count = int(constraint.get("stable_count", 1) or 1)
+            except Exception:
+                stable_count = 1
+
+            if stable_count < 2:
+                continue
+
+            filtered.append(constraint)
+
+        return filtered
+
+    def build_route_intent_payload(self, local, nearest, ego_s, target_s, remaining_m, lateral_error_m):
+        road_option = str(local.get("road_option", "UNKNOWN"))
+        maneuver = road_option_to_maneuver(road_option)
+        constraints = self.fresh_route_constraints()
+
+        blocking_constraints = []
+        non_blocking_constraints = []
+
+        for constraint in constraints:
+            if constraint_blocks_maneuver(constraint, maneuver):
+                blocking_constraints.append(constraint)
+            else:
+                non_blocking_constraints.append(constraint)
+
+        route_decision_status = "clear"
+        route_decision_reason = "no_active_route_constraint"
+
+        if constraints:
+            route_decision_status = "constrained"
+            route_decision_reason = "active_route_constraint"
+
+        if blocking_constraints:
+            if self.route_constraint_block_on_violation:
+                route_decision_status = "blocked"
+                route_decision_reason = (
+                    f"route_constraint_blocks_{maneuver}:"
+                    + ",".join(str(x.get("sign_type")) for x in blocking_constraints[:3])
+                )
+            else:
+                route_decision_status = "violation_warning"
+                route_decision_reason = (
+                    f"route_constraint_warns_{maneuver}:"
+                    + ",".join(str(x.get("sign_type")) for x in blocking_constraints[:3])
+                )
+
+        payload = {
+            "stamp": time.time(),
+            "route_id": self.route_id,
+            "target_name": self.active_target.get("name") if isinstance(self.active_target, dict) else None,
+            "mission_stage": self.latest_mission.get("stage") if self.latest_mission else None,
+            "objective_index": self.latest_mission.get("objective_index", self.latest_mission.get("route_index"))
+            if self.latest_mission else None,
+            "objective_kind": self.latest_mission.get("objective_kind", self.latest_mission.get("route_kind"))
+            if self.latest_mission else None,
+
+            "route_status": self.route_status,
+            "route_decision_status": route_decision_status,
+            "route_decision_reason": route_decision_reason,
+
+            "current_road_option": road_option,
+            "current_maneuver": maneuver,
+            "route_intent": maneuver,
+            "local_target": {
+                "x": local.get("x"),
+                "y": local.get("y"),
+                "z": local.get("z"),
+                "yaw": local.get("yaw"),
+                "road_id": local.get("road_id"),
+                "lane_id": local.get("lane_id"),
+                "distance_m": local.get("distance_m"),
+            },
+            "nearest_route": {
+                "idx": nearest.get("idx") if isinstance(nearest, dict) else None,
+                "road_option": nearest.get("road_option") if isinstance(nearest, dict) else None,
+                "distance_m": nearest.get("distance_m") if isinstance(nearest, dict) else None,
+            },
+
+            "ego_s_m": round(float(ego_s), 3),
+            "target_s_m": round(float(target_s), 3),
+            "remaining_m": round(float(remaining_m), 3),
+            "lateral_error_m": round(float(lateral_error_m), 3),
+
+            "active_constraints": summarize_constraints_for_log(constraints),
+            "blocking_constraints": summarize_constraints_for_log(blocking_constraints),
+            "non_blocking_constraints": summarize_constraints_for_log(non_blocking_constraints),
+            "constraint_age_s": round(time.time() - self.last_route_constraints_time, 3)
+            if self.last_route_constraints_time else None,
+        }
+
+        return payload
+
+    def publish_route_intent(self, route_intent):
+        msg = String()
+        msg.data = json.dumps(route_intent, ensure_ascii=False)
+        self.route_intent_pub.publish(msg)
+        self.last_route_intent_payload = route_intent
+
+        if route_intent.get("route_decision_status") != "clear":
+            self.get_logger().info(
+                "ROUTE_INTENT "
+                f"status={route_intent.get('route_decision_status')} "
+                f"intent={route_intent.get('route_intent')} "
+                f"reason={route_intent.get('route_decision_reason')} "
+                f"constraints={[x.get('sign_type') for x in route_intent.get('active_constraints', [])]}",
+                throttle_duration_sec=0.5,
+            )
 
     def find_ego(self):
         now = time.time()
@@ -518,6 +704,15 @@ class GlobalRoutePlannerNode(Node):
         remaining_m = max(0.0, route_len - ego_s)
         speed_hint = self.compute_speed_hint(remaining_m)
 
+        route_intent = self.build_route_intent_payload(
+            local=local,
+            nearest=nearest,
+            ego_s=ego_s,
+            target_s=target_s,
+            remaining_m=remaining_m,
+            lateral_error_m=lateral_error_m,
+        )
+
         yaw = None
         if ego_tf is not None:
             try:
@@ -549,6 +744,11 @@ class GlobalRoutePlannerNode(Node):
             "road_id": local["road_id"],
             "lane_id": local["lane_id"],
             "road_option": local["road_option"],
+            "route_intent": route_intent.get("route_intent"),
+            "route_decision_status": route_intent.get("route_decision_status"),
+            "route_decision_reason": route_intent.get("route_decision_reason"),
+            "active_route_constraints": route_intent.get("active_constraints", []),
+            "blocking_route_constraints": route_intent.get("blocking_constraints", []),
             "speed_hint_mps": round(float(speed_hint), 3),
             "speed_hint_kmh": round(float(speed_hint) * 3.6, 1),
 
@@ -560,6 +760,8 @@ class GlobalRoutePlannerNode(Node):
                 "yaw": yaw,
             },
         }
+
+        self.publish_route_intent(route_intent)
 
         msg = String()
         msg.data = json.dumps(payload, ensure_ascii=False)
@@ -583,6 +785,8 @@ class GlobalRoutePlannerNode(Node):
             "route_length_m": round(float(self.route_samples[-1]["distance_m"]), 3)
             if self.route_samples else None,
             "last_local_target": self.last_local_payload,
+            "last_route_intent": self.last_route_intent_payload,
+            "fresh_route_constraints": summarize_constraints_for_log(self.fresh_route_constraints()),
         }
 
         msg = String()

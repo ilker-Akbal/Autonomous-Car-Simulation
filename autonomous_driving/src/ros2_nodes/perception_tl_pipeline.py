@@ -129,7 +129,12 @@ class TrafficLightPipeline:
         out = dict(det)
         bbox = out.get("bbox") or [0, 0, 0, 0]
 
-        hsv_state, hsv_conf, hsv_scores, hsv_reason = self.classify_with_hsv(frame, bbox)
+        use_hsv = bool(getattr(self.node, "tl_state_use_hsv_fallback", True))
+        if use_hsv:
+            hsv_state, hsv_conf, hsv_scores, hsv_reason = self.classify_with_hsv(frame, bbox)
+        else:
+            hsv_state, hsv_conf, hsv_scores, hsv_reason = "unknown", 0.0, {}, "hsv_disabled"
+
         cls_state, cls_conf, cls_probs, cls_reason = self.classify_with_model(frame, bbox)
         best_state, best_conf = self.best_prob(cls_probs)
 
@@ -173,11 +178,56 @@ class TrafficLightPipeline:
 
     def select_active(self, candidates, frame_w, frame_h):
         usable = []
+        rejected = []
+
+        roi_enabled = str(os.environ.get("TL_ACTIVE_ROI_ENABLED", "1")).strip() not in {
+            "0",
+            "false",
+            "False",
+        }
+
+        roi_x_min = _env_float("TL_ACTIVE_ROI_X_MIN", 0.18)
+        roi_x_max = _env_float("TL_ACTIVE_ROI_X_MAX", 0.72)
+        roi_y_min = _env_float("TL_ACTIVE_ROI_Y_MIN", 0.02)
+        roi_y_max = _env_float("TL_ACTIVE_ROI_Y_MAX", 0.62)
+
+        target_x = _env_float("TL_ACTIVE_TARGET_X_RATIO", 0.46)
+        target_y = _env_float("TL_ACTIVE_TARGET_Y_RATIO", 0.42)
+
+        # Şerit bitimindeki Türkiye tipi ışıklarda bbox gerçekten küçük geliyor.
+        # Bu yüzden red/yellow için ayrı, green için ayrı eşik kullanıyoruz.
+        min_det_conf = _env_float("TL_SIMPLE_MIN_DET_CONF", 0.04)
+        min_state_conf = _env_float("TL_SIMPLE_ACTIVE_STATE_CONF", 0.30)
+
+        red_min_area_ratio = _env_float("TL_ACTIVE_RED_MIN_AREA_RATIO", 0.00012)
+        red_min_width_ratio = _env_float("TL_ACTIVE_RED_MIN_WIDTH_RATIO", 0.0045)
+        red_min_height_ratio = _env_float("TL_ACTIVE_RED_MIN_HEIGHT_RATIO", 0.018)
+
+        green_min_area_ratio = _env_float("TL_ACTIVE_GREEN_MIN_AREA_RATIO", 0.00030)
+        green_min_width_ratio = _env_float("TL_ACTIVE_GREEN_MIN_WIDTH_RATIO", 0.0080)
+        green_min_height_ratio = _env_float("TL_ACTIVE_GREEN_MIN_HEIGHT_RATIO", 0.030)
+        green_min_det_conf = _env_float("TL_ACTIVE_GREEN_MIN_DET_CONF", 0.25)
+        green_min_state_conf = _env_float("TL_ACTIVE_GREEN_MIN_STATE_CONF", 0.80)
+
+        min_bottom_ratio = _env_float("TL_ACTIVE_MIN_BOTTOM_RATIO", 0.06)
+        max_distance_m = _env_float("TL_ACTIVE_MAX_DISTANCE_M", 45.0)
+        size_norm_area = _env_float("TL_ACTIVE_SIZE_NORM_AREA", 90.0)
 
         for det in candidates:
             geom = self.bbox_geom(det, frame_w, frame_h)
+            bbox = geom["bbox"]
+
+            width_ratio = geom["bw"] / max(1.0, float(frame_w))
+            height_ratio = geom["bh"] / max(1.0, float(frame_h))
+            bottom_ratio = bbox[3] / max(1.0, float(frame_h))
+            area_ratio = geom["area"] / max(1.0, float(frame_w) * float(frame_h))
+
             det["tl_cx_ratio"] = round(geom["cx_ratio"], 4)
             det["tl_cy_ratio"] = round(geom["cy_ratio"], 4)
+            det["tl_width_ratio"] = round(width_ratio, 4)
+            det["tl_height_ratio"] = round(height_ratio, 4)
+            det["tl_bottom_ratio"] = round(bottom_ratio, 4)
+            det["tl_area_ratio"] = round(area_ratio, 6)
             det["tl_area"] = round(geom["area"], 2)
 
             state = self.norm_state(det.get("traffic_light_state"))
@@ -186,38 +236,136 @@ class TrafficLightPipeline:
 
             if state not in self.KNOWN:
                 det["tl_pipeline_reject_reason"] = "unknown_state"
+                rejected.append(det)
                 continue
 
-            if det_conf < _env_float("TL_SIMPLE_MIN_DET_CONF", 0.06):
-                det["tl_pipeline_reject_reason"] = "low_det_conf"
+            if det_conf < min_det_conf:
+                det["tl_pipeline_reject_reason"] = f"low_det_conf:{det_conf:.3f}"
+                rejected.append(det)
                 continue
 
-            if conf < _env_float("TL_SIMPLE_ACTIVE_STATE_CONF", 0.30):
-                det["tl_pipeline_reject_reason"] = "low_state_conf"
+            if conf < min_state_conf:
+                det["tl_pipeline_reject_reason"] = f"low_state_conf:{conf:.3f}"
+                rejected.append(det)
                 continue
 
-            target_x = _env_float("TL_ACTIVE_TARGET_X_RATIO", 0.52)
-            target_y = _env_float("TL_ACTIVE_TARGET_Y_RATIO", 0.24)
+            if roi_enabled and not (
+                roi_x_min <= geom["cx_ratio"] <= roi_x_max
+                and roi_y_min <= geom["cy_ratio"] <= roi_y_max
+            ):
+                det["tl_pipeline_reject_reason"] = (
+                    f"outside_active_roi:x={geom['cx_ratio']:.3f},"
+                    f"y={geom['cy_ratio']:.3f}"
+                )
+                rejected.append(det)
+                continue
 
-            x_score = 1.0 - min(1.0, abs(geom["cx_ratio"] - target_x) / 0.55)
-            y_score = 1.0 - min(1.0, abs(geom["cy_ratio"] - target_y) / 0.55)
-            size_score = min(1.0, geom["area"] / _env_float("TL_ACTIVE_SIZE_NORM_AREA", 500.0))
+            if bottom_ratio < min_bottom_ratio:
+                det["tl_pipeline_reject_reason"] = f"too_high_bottom:{bottom_ratio:.4f}"
+                rejected.append(det)
+                continue
+
+            # Distance varsa çok uzaktaki kavşak ışığını alma.
+            # Distance yoksa reject etmiyoruz; logda gerçek kırmızıların bazılarında distance_source none geliyor.
+            try:
+                dist_m = float(det.get("distance_m") or det.get("distance_est") or 0.0)
+            except Exception:
+                dist_m = 0.0
+
+            if dist_m > 0.0 and dist_m > max_distance_m:
+                det["tl_pipeline_reject_reason"] = f"too_far:{dist_m:.1f}m"
+                rejected.append(det)
+                continue
+
+            if state in {"red", "yellow"}:
+                min_area_ratio = red_min_area_ratio
+                min_width_ratio = red_min_width_ratio
+                min_height_ratio = red_min_height_ratio
+            else:
+                min_area_ratio = green_min_area_ratio
+                min_width_ratio = green_min_width_ratio
+                min_height_ratio = green_min_height_ratio
+
+            if state == "green":
+                if det_conf < green_min_det_conf:
+                    det["tl_pipeline_reject_reason"] = f"green_reject_low_det_conf:{det_conf:.3f}"
+                    rejected.append(det)
+                    continue
+
+                if conf < green_min_state_conf:
+                    det["tl_pipeline_reject_reason"] = f"green_reject_low_state_conf:{conf:.3f}"
+                    rejected.append(det)
+                    continue
+
+            if area_ratio < min_area_ratio:
+                det["tl_pipeline_reject_reason"] = f"small_area:{area_ratio:.6f}"
+                rejected.append(det)
+                continue
+
+            if width_ratio < min_width_ratio:
+                det["tl_pipeline_reject_reason"] = f"small_width:{width_ratio:.4f}"
+                rejected.append(det)
+                continue
+
+            if height_ratio < min_height_ratio:
+                det["tl_pipeline_reject_reason"] = f"small_height:{height_ratio:.4f}"
+                rejected.append(det)
+                continue
+
+            x_score = 1.0 - min(1.0, abs(geom["cx_ratio"] - target_x) / 0.34)
+            y_score = 1.0 - min(1.0, abs(geom["cy_ratio"] - target_y) / 0.34)
+            size_score = min(1.0, geom["area"] / max(1.0, size_norm_area))
+            bottom_score = min(1.0, bottom_ratio / 0.50)
+
+            # Aynı ROI içinde kırmızı/sarı, yeşile göre daha güvenli tarafta kalmalı.
+            # Yanlış yeşile GO demek, kırmızıyı kaçırmaktan daha tehlikeli.
+            if state == "red":
+                state_priority = 1.00
+            elif state == "yellow":
+                state_priority = 0.82
+            else:
+                state_priority = 0.62
+
+            distance_score = 0.5
+            if dist_m > 0.0:
+                distance_score = 1.0 - min(1.0, dist_m / max_distance_m)
 
             score = (
-                0.35 * x_score
-                + 0.25 * y_score
-                + 0.20 * size_score
-                + 0.20 * conf
+                _env_float("TL_ACTIVE_TARGET_X_WEIGHT", 0.30) * x_score
+                + _env_float("TL_ACTIVE_TARGET_Y_WEIGHT", 0.16) * y_score
+                + _env_float("TL_ACTIVE_SIZE_WEIGHT", 0.12) * size_score
+                + _env_float("TL_ACTIVE_BOTTOM_WEIGHT", 0.08) * bottom_score
+                + _env_float("TL_ACTIVE_STATE_CONF_WEIGHT", 0.10) * conf
+                + _env_float("TL_ACTIVE_DET_CONF_WEIGHT", 0.06) * det_conf
+                + _env_float("TL_ACTIVE_STATE_PRIORITY_WEIGHT", 0.14) * state_priority
+                + _env_float("TL_ACTIVE_DISTANCE_WEIGHT", 0.04) * distance_score
             )
 
+            det["tl_active_x_score"] = round(x_score, 4)
+            det["tl_active_y_score"] = round(y_score, 4)
+            det["tl_active_size_score"] = round(size_score, 4)
+            det["tl_active_bottom_score"] = round(bottom_score, 4)
+            det["tl_active_state_priority"] = round(state_priority, 4)
+            det["tl_active_distance_score"] = round(distance_score, 4)
             det["tl_active_score"] = round(score, 4)
+            det["tl_pipeline_reject_reason"] = None
+
             usable.append(det)
 
         if not usable:
-            return None, candidates
+            return None, rejected
 
         usable.sort(key=lambda d: d.get("tl_active_score", 0.0), reverse=True)
-        return usable[0], [d for d in candidates if d not in usable]
+        active = usable[0]
+
+        for det in usable[1:]:
+            det["tl_pipeline_reject_reason"] = (
+                f"lower_active_score:{det.get('tl_active_score', 0.0)}"
+                f"<{active.get('tl_active_score', 0.0)}"
+            )
+            rejected.append(det)
+
+        return active, rejected
 
     def process(self, frame, detections, frame_w, frame_h):
         out = []
@@ -267,6 +415,16 @@ class TrafficLightPipeline:
                 "rejected_count": len(rejected),
                 "score": active.get("tl_active_score"),
                 "roi": None,
+                "distance_m": active.get("distance_m"),
+                "distance_est": active.get("distance_est"),
+                "distance_source": active.get("distance_source"),
+                "tl_cx_ratio": active.get("tl_cx_ratio"),
+                "tl_cy_ratio": active.get("tl_cy_ratio"),
+                "tl_width_ratio": active.get("tl_width_ratio"),
+                "tl_height_ratio": active.get("tl_height_ratio"),
+                "tl_bottom_ratio": active.get("tl_bottom_ratio"),
+                "tl_area_ratio": active.get("tl_area_ratio"),
+                "tl_area": active.get("tl_area"),
             }
 
         out.extend(tl_candidates)
