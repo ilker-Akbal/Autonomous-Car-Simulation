@@ -24,7 +24,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_967_wp_0_road_62_lane_1",
@@ -47,7 +47,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_959_wp_0_road_21_lane_1",
@@ -70,7 +70,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_958_wp_0_road_2_lane_2",
@@ -93,7 +93,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_958_wp_1_road_2_lane_3",
@@ -116,7 +116,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_957_wp_0_road_66_lane_-1",
@@ -139,7 +139,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_957_wp_1_road_66_lane_-2",
@@ -162,7 +162,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_956_wp_0_road_20_lane_-1",
@@ -185,7 +185,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_955_wp_0_road_18_lane_1",
@@ -208,7 +208,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_955_wp_1_road_18_lane_-1",
@@ -231,7 +231,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_954_wp_0_road_19_lane_1",
@@ -254,7 +254,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_953_wp_0_road_29_lane_2",
@@ -277,7 +277,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_953_wp_1_road_29_lane_3",
@@ -300,7 +300,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_952_wp_0_road_28_lane_-1",
@@ -323,7 +323,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_952_wp_1_road_28_lane_-2",
@@ -346,7 +346,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_951_wp_0_road_62_lane_-1",
@@ -369,7 +369,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_950_wp_0_road_29_lane_-1",
@@ -392,7 +392,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_950_wp_1_road_29_lane_-2",
@@ -415,7 +415,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_949_wp_0_road_1_lane_-1",
@@ -438,7 +438,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_949_wp_1_road_1_lane_-2",
@@ -461,7 +461,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_948_wp_0_road_0_lane_-1",
@@ -484,7 +484,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_948_wp_1_road_0_lane_-2",
@@ -507,7 +507,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_947_wp_0_road_41_lane_-1",
@@ -530,7 +530,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_947_wp_1_road_41_lane_1",
@@ -553,7 +553,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_946_wp_0_road_1_lane_2",
@@ -576,7 +576,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_946_wp_1_road_1_lane_3",
@@ -599,7 +599,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_945_wp_0_road_73_lane_1",
@@ -622,7 +622,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_944_wp_0_road_65_lane_2",
@@ -645,7 +645,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_944_wp_1_road_65_lane_3",
@@ -668,7 +668,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_943_wp_0_road_0_lane_3",
@@ -691,7 +691,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_942_wp_0_road_41_lane_1",
@@ -714,7 +714,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_942_wp_1_road_41_lane_-1",
@@ -737,7 +737,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_941_wp_0_road_17_lane_1",
@@ -760,7 +760,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_941_wp_1_road_17_lane_-1",
@@ -783,7 +783,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_940_wp_0_road_18_lane_1",
@@ -806,7 +806,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_939_wp_0_road_42_lane_1",
@@ -829,7 +829,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_938_wp_0_road_73_lane_-1",
@@ -852,7 +852,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_937_wp_0_road_74_lane_1",
@@ -875,7 +875,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_936_wp_0_road_17_lane_1",
@@ -898,7 +898,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_935_wp_0_road_3_lane_-1",
@@ -921,7 +921,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_935_wp_1_road_3_lane_-2",
@@ -944,7 +944,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_934_wp_0_road_1382_lane_1",
@@ -967,7 +967,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_934_wp_1_road_1363_lane_1",
@@ -990,7 +990,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_933_wp_0_road_67_lane_2",
@@ -1013,7 +1013,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_933_wp_1_road_67_lane_3",
@@ -1036,7 +1036,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_932_wp_0_road_30_lane_-1",
@@ -1059,7 +1059,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_932_wp_1_road_30_lane_-2",
@@ -1082,7 +1082,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_931_wp_0_road_24_lane_-1",
@@ -1105,7 +1105,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_930_wp_0_road_76_lane_1",
@@ -1128,7 +1128,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_929_wp_0_road_1030_lane_4",
@@ -1151,7 +1151,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_929_wp_1_road_1030_lane_5",
@@ -1174,7 +1174,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_928_wp_0_road_24_lane_1",
@@ -1197,7 +1197,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_927_wp_0_road_23_lane_-1",
@@ -1220,7 +1220,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_926_wp_0_road_69_lane_2",
@@ -1243,7 +1243,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_926_wp_1_road_69_lane_-1",
@@ -1266,7 +1266,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_925_wp_0_road_4_lane_-1",
@@ -1289,7 +1289,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_925_wp_1_road_4_lane_-2",
@@ -1312,7 +1312,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_924_wp_0_road_943_lane_1",
@@ -1335,7 +1335,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_924_wp_1_road_874_lane_2",
@@ -1358,7 +1358,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_924_wp_2_road_874_lane_3",
@@ -1381,7 +1381,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_920_wp_0_road_24_lane_-1",
@@ -1404,7 +1404,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_919_wp_0_road_1_lane_-1",
@@ -1427,7 +1427,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_919_wp_1_road_1_lane_-2",
@@ -1450,7 +1450,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_918_wp_0_road_0_lane_-1",
@@ -1473,7 +1473,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_918_wp_1_road_0_lane_-2",
@@ -1496,7 +1496,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_917_wp_0_road_65_lane_2",
@@ -1519,7 +1519,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_917_wp_1_road_65_lane_3",
@@ -1542,7 +1542,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_916_wp_0_road_31_lane_5",
@@ -1565,7 +1565,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_916_wp_1_road_31_lane_4",
@@ -1588,7 +1588,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_915_wp_0_road_0_lane_2",
@@ -1611,7 +1611,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     },
     {
       "id": "carla_tl_915_wp_1_road_0_lane_3",
@@ -1634,7 +1634,7 @@
       "approach_speed_mps": 4.0,
       "crawl_speed_mps": 1.1,
       "stop_speed_mps": 0.0,
-      "stop_before_m": 2.0
+      "stop_before_m": 1.0
     }
   ]
 }

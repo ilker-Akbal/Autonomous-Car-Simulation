@@ -278,6 +278,8 @@ def generate_launch_description():
                         "detections_topic": "/adas/perception/detections_json",
                         "decision_events_topic": "/adas/perception/decision_events_json",
                         "route_constraints_topic": "/adas/perception/route_constraints_json",
+                        "decision_events_topic_v2": "/adas/perception/decision_events",
+                        "route_constraints_topic_v2": "/adas/perception/route_constraints",
                         "annotated_topic": "/adas/perception/annotated_image",
 
                         "model_path": model_path,
@@ -344,6 +346,8 @@ def generate_launch_description():
                         "detections_topic": "/adas/perception/detections_json",
                         "decision_events_topic": "/adas/perception/decision_events_json",
                         "route_intent_topic": "/adas/planning/route_intent",
+                        "decision_command_topic": "/adas/decision/command",
+                        "decision_debug_topic": "/adas/decision/debug",
                         "route_constraint_wait_stop": False,
                         "decision_topic": "/adas/decision",
                         "default_go_speed": 8.33,
@@ -388,6 +392,11 @@ def generate_launch_description():
                         "tl_red_distance_far_outlier_m": 55.0,
                         "tl_red_distance_outlier_jump_m": 18.0,
                         "tl_red_distance_memory_seconds": 6.0,
+                        "tl_stop_before_line_m": 1.0,
+                        "tl_brake_decel_mps2": 3.0,
+                        "tl_reaction_time_s": 0.75,
+                        "tl_brake_safety_margin_m": 2.0,
+                        "tl_green_confirm_count": 1,
                         # Levha kararları aktif.
                         # Perception 0.15 ile traffic_sign yayıyor; decision tarafında da makul eşik kullanıyoruz.
                         "traffic_sign_conf_threshold": 0.15,
@@ -459,8 +468,13 @@ TimerAction(
                         "debug_topic": "/adas/planning/route_debug",
                         "route_constraints_topic": "/adas/perception/route_constraints_json",
                         "route_intent_topic": "/adas/planning/route_intent",
+                        "route_debug_topic_v2": "/adas/route/debug",
+                        "route_intent_topic_v2": "/adas/route/intent",
                         "route_constraint_timeout_s": 2.5,
                         "route_constraint_block_on_violation": False,
+                        "manual_tl_stoplines_enabled": True,
+                        "manual_tl_stoplines_path": "autonomous_driving/configs/manual_stoplines_town03.json",
+                        "default_stop_before_line_m": 1.0,
 
                         "route_resolution_m": 2.0,
                         "lookahead_m": 20.0,

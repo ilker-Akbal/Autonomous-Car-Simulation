@@ -1,0 +1,557 @@
+{
+  "run_dir": "outputs/teknofest_sim_logs/teknofest_run_20260528_025316",
+  "started_at": 1779925996.1271713,
+  "mission_completed": false,
+  "mission_failed": false,
+  "collision_count": 0,
+  "passenger_stop_started": 1,
+  "passenger_stop_completed": 1,
+  "park_entry_reached": false,
+  "last_stage": "GO_TO_TASK",
+  "last_decision": {
+    "stamp": 1779926147.331072,
+    "source": "decision_node",
+    "ttl_sec": 1.0,
+    "command_version": "decision_command_v1",
+    "decision": "STOP",
+    "risk": "HIGH",
+    "target_speed": 0.0,
+    "target_speed_mps": 0.0,
+    "target_speed_kmh": 0.0,
+    "distance_est": null,
+    "front_vehicle": null,
+    "traffic_light_state": "unknown",
+    "traffic_light": null,
+    "tl_state_machine_state": "APPROACHING_TL",
+    "stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+    "distance_to_stopline_m": 14.247,
+    "stopline_dist_m": 14.247,
+    "stop_before_m": 2.0,
+    "stop_target_dist_m": 12.247,
+    "stopline_route_valid": true,
+    "stopline_context": {
+      "distance_to_stopline_m": 14.247,
+      "stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+      "stopline_valid": true,
+      "stopline_pose": {
+        "x": 111.538,
+        "y": -191.2,
+        "z": 0.0,
+        "yaw_deg": 1.44
+      },
+      "stopline_lateral_m": 4.622,
+      "stop_before_m": 2.0,
+      "stop_target_dist_m": 12.247,
+      "release_after_pass_m": 1.0,
+      "road_id": 0,
+      "lane_id": 3,
+      "traffic_light_id": null,
+      "road_match": true,
+      "lane_match": true,
+      "route_connected_match": false,
+      "route_valid": true,
+      "selection_reject_reason": null,
+      "debug": "TL_STOPLINE_SELECTED:id=carla_tl_943_wp_0_road_0_lane_3,dist=14.25,target=12.25,lat=4.62,road_id=0,lane_id=3,lane_match=1,road_match=1,route_connected_match=0,route_valid=1,selection_reject_reason=None",
+      "stopline_road_id": 0,
+      "stopline_lane_id": 3
+    },
+    "current_speed_mps": 0.0,
+    "should_stop": true,
+    "stop_reason": "route_constraint_wait:ROUTE_CONSTRAINT_BLOCKED:ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+    "stop_distance_m": null,
+    "emergency_brake": false,
+    "release_condition": null,
+    "green_release_allowed": false,
+    "debug_reason": "route_constraint_wait:ROUTE_CONSTRAINT_BLOCKED:ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+    "desired_maneuver": "right",
+    "lane_keep_required": true,
+    "preferred_lane": "right",
+    "route_allowed_maneuvers": [
+      "left"
+    ],
+    "route_forbidden_maneuvers": [],
+    "lane_keep_status": {
+      "preferred_side": "right",
+      "target_lane_id": 3,
+      "current_lane_id": 1,
+      "desired_lane_id": 3,
+      "lane_source": "route_sample_lane_center_right_preferred",
+      "lateral_error_m": 1.123,
+      "reason": "RIGHT_LANE_PREFERRED:right_hand_traffic_default"
+    },
+    "active_sign_constraints": [
+      {
+        "sign_type": "sola_mecburi_yon",
+        "constraint_type": "mandatory_direction",
+        "forbidden": [],
+        "required": [
+          "left"
+        ],
+        "allowed": [],
+        "preferred_side": null,
+        "confidence": 0.6723
+      },
+      {
+        "sign_type": "ileri_ve_sola_mecburi_yon",
+        "constraint_type": "allowed_direction",
+        "forbidden": [],
+        "required": [],
+        "allowed": [
+          "straight",
+          "left"
+        ],
+        "preferred_side": null,
+        "confidence": 0.4188
+      }
+    ],
+    "red_light_latch_active": false,
+    "red_light_latch_left_s": 0.0,
+    "active_sign": {
+      "class_id": 3,
+      "label": "traffic_sign",
+      "original_label": "traffic_sign",
+      "confidence": 0.8739535212516785,
+      "bbox": [
+        606.49169921875,
+        161.5287322998047,
+        631.133544921875,
+        184.44088745117188
+      ],
+      "center_x": 618.8126220703125,
+      "center_y": 172.98480987548828,
+      "bbox_width": 24.641845703125,
+      "bbox_height": 22.912155151367188,
+      "area_ratio": 0.002451,
+      "source": "model_only_yolo",
+      "sign_type": "hiz_siniri_30",
+      "sign_name": "Hız Sınırı 30",
+      "sign_confidence": 0.8590434193611145,
+      "sign_probs": {
+        "ada_etrafinda_donunuz": 0.005219029728323221,
+        "dikkat": 0.0027745019178837538,
+        "dur": 0.008203689008951187,
+        "girisi_olmayan_yol": 0.0034221517853438854,
+        "hiz_siniri_20": 0.018407471477985382,
+        "hiz_siniri_30": 0.8590434193611145,
+        "hiz_siniri_40": 0.013600487262010574,
+        "hiz_siniri_50": 0.027728572487831116,
+        "iki_yonlu_yol": 0.004900777246803045,
+        "ileri_mecburi_yon": 0.0020974520593881607,
+        "ileri_ve_saga_mecburi_yon": 0.002628228859975934,
+        "ileri_ve_sola_mecburi_yon": 0.0028493492864072323,
+        "isikli_isaret_cihazi": 0.0044779665768146515,
+        "okul_gecidi": 0.00246905954554677,
+        "park_etmek_yasaktir": 0.0035124323330819607,
+        "park_yeri": 0.002395165618509054,
+        "saga_donulmez": 0.007366994861513376,
+        "saga_mecburi_yon": 0.0024531802628189325,
+        "sagdan_gidiniz": 0.0019471852574497461,
+        "sola_donulmez": 0.0036222683265805244,
+        "sola_mecburi_yon": 0.0019212559564039111,
+        "soldan_gidiniz": 0.0035952774342149496,
+        "tunel": 0.0031726823654025793,
+        "yaya_gecidi": 0.003217495046555996,
+        "yol_calismasi": 0.004530514124780893,
+        "yol_ver": 0.00444337073713541
+      },
+      "sign_source": "classifier:hiz_siniri_30:0.859",
+      "distance_source": "none",
+      "traffic_sign_type": "hiz_siniri_30",
+      "active_sign_score": 0.9369,
+      "active_sign_filter": "decision_near_sign_filter",
+      "bottom_ratio": 0.5123
+    },
+    "person_risk": "none",
+    "raw_person_risk": "none",
+    "person_hold_active": false,
+    "active_person": null,
+    "speed_limit_active": "hiz_siniri_30",
+    "decision_events": [
+      {
+        "stamp": 1779926147.3297527,
+        "source": "perception_sign",
+        "ttl_sec": 2.5,
+        "sign_type": "hiz_siniri_30",
+        "sign_name": "Hız Sınırı 30",
+        "confidence": 0.874,
+        "yolo_confidence": 0.874,
+        "sign_confidence": 0.859,
+        "bbox": [
+          606.49169921875,
+          161.5287322998047,
+          631.133544921875,
+          184.44088745117188
+        ],
+        "metrics": {
+          "bbox_width": 24.642,
+          "bbox_height": 22.912,
+          "bbox_area": 564.598,
+          "cx_ratio": 0.9669,
+          "bbox_width_ratio": 0.0385,
+          "cy_ratio": 0.4805,
+          "bottom_ratio": 0.5123,
+          "bbox_height_ratio": 0.0636,
+          "area_ratio": 0.002451
+        },
+        "sign_source": "classifier:hiz_siniri_30:0.859",
+        "distance_m": null,
+        "distance_est": null,
+        "distance_source": null,
+        "frame": "camera_front",
+        "position": {
+          "frame": "vehicle",
+          "distance_m": null,
+          "source": null
+        },
+        "debug": {
+          "original_label": "traffic_sign",
+          "source": "model_only_yolo"
+        },
+        "cx_ratio": 0.9669,
+        "cy_ratio": 0.4805,
+        "bottom_ratio": 0.5123,
+        "bbox_width_ratio": 0.0385,
+        "bbox_height_ratio": 0.0636,
+        "area_ratio": 0.002451,
+        "category": "decision_event",
+        "event_type": "speed_limit",
+        "speed_limit_kmh": 30.0,
+        "target_behavior": "set_speed_limit"
+      }
+    ],
+    "route_intent": {
+      "stamp": 1779926147.292964,
+      "source": "global_route_planner_node",
+      "ttl_sec": 1.0,
+      "schema_version": "route_intent_v1",
+      "route_id": 2,
+      "target_name": "gorev_2",
+      "mission_stage": "GO_TO_TASK",
+      "objective_index": 1,
+      "objective_kind": "task",
+      "route_status": "route_ready",
+      "route_decision_status": "blocked",
+      "route_decision_reason": "ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+      "current_road_option": "RIGHT",
+      "current_maneuver": "right",
+      "next_maneuver": "right",
+      "route_intent": "right",
+      "desired_maneuver": "right",
+      "target_lane": 3,
+      "preferred_side": "right",
+      "preferred_lane_side": "right",
+      "target_lane_id": 3,
+      "current_lane_id": 1,
+      "desired_lane_id": 3,
+      "lane_source": "route_sample_lane_center_right_preferred",
+      "allowed_maneuvers": [
+        "left"
+      ],
+      "forbidden_maneuvers": [],
+      "local_target": {
+        "x": 97.16707611083984,
+        "y": -191.56126403808594,
+        "z": 0.0,
+        "yaw": 1.4395599365234375,
+        "road_id": 0,
+        "lane_id": 3,
+        "distance_m": 149.7814046263287
+      },
+      "nearest_route": {
+        "idx": 76,
+        "road_option": "RIGHT",
+        "distance_m": 146.08607351018637
+      },
+      "ego_s_m": 146.086,
+      "target_s_m": 149.781,
+      "remaining_m": 3.695,
+      "lateral_error_m": 1.123,
+      "distance_to_next_turn": 3.695,
+      "distance_to_task_target": 3.695,
+      "desired_heading": 1.4395599365234375,
+      "route_confidence": 1.0,
+      "current_speed_mps": 0.0,
+      "lane_keep_required": true,
+      "lane_keep_status": {
+        "preferred_side": "right",
+        "target_lane_id": 3,
+        "current_lane_id": 1,
+        "desired_lane_id": 3,
+        "lane_source": "route_sample_lane_center_right_preferred",
+        "lateral_error_m": 1.123,
+        "reason": "RIGHT_LANE_PREFERRED:right_hand_traffic_default"
+      },
+      "distance_to_stopline_m": 14.247,
+      "stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+      "stopline_valid": true,
+      "stopline_pose": {
+        "x": 111.538,
+        "y": -191.2,
+        "z": 0.0,
+        "yaw_deg": 1.44
+      },
+      "stopline_lateral_m": 4.622,
+      "stop_before_m": 2.0,
+      "stop_target_dist_m": 12.247,
+      "release_after_pass_m": 1.0,
+      "stopline_road_id": 0,
+      "stopline_lane_id": 3,
+      "stopline_route_valid": true,
+      "stopline_road_match": true,
+      "stopline_lane_match": true,
+      "stopline_route_connected_match": false,
+      "stopline_selection_reject_reason": null,
+      "stopline_context": {
+        "distance_to_stopline_m": 14.247,
+        "stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+        "stopline_valid": true,
+        "stopline_pose": {
+          "x": 111.538,
+          "y": -191.2,
+          "z": 0.0,
+          "yaw_deg": 1.44
+        },
+        "stopline_lateral_m": 4.622,
+        "stop_before_m": 2.0,
+        "stop_target_dist_m": 12.247,
+        "release_after_pass_m": 1.0,
+        "road_id": 0,
+        "lane_id": 3,
+        "traffic_light_id": null,
+        "road_match": true,
+        "lane_match": true,
+        "route_connected_match": false,
+        "route_valid": true,
+        "selection_reject_reason": null,
+        "debug": "TL_STOPLINE_SELECTED:id=carla_tl_943_wp_0_road_0_lane_3,dist=14.25,target=12.25,lat=4.62,road_id=0,lane_id=3,lane_match=1,road_match=1,route_connected_match=0,route_valid=1,selection_reject_reason=None",
+        "stopline_road_id": 0,
+        "stopline_lane_id": 3
+      },
+      "route_constraint_status": {
+        "status": "blocked",
+        "reason": "ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+        "allowed_maneuvers": [
+          "left"
+        ],
+        "forbidden_maneuvers": [],
+        "preferred_side": "right"
+      },
+      "active_constraints": [
+        {
+          "sign_type": "sola_mecburi_yon",
+          "constraint_type": "mandatory_direction",
+          "forbidden": [],
+          "required": [
+            "left"
+          ],
+          "allowed": [],
+          "preferred_side": null,
+          "confidence": 0.6723
+        },
+        {
+          "sign_type": "ileri_ve_sola_mecburi_yon",
+          "constraint_type": "allowed_direction",
+          "forbidden": [],
+          "required": [],
+          "allowed": [
+            "straight",
+            "left"
+          ],
+          "preferred_side": null,
+          "confidence": 0.4188
+        }
+      ],
+      "active_route_constraints": [
+        {
+          "sign_type": "sola_mecburi_yon",
+          "constraint_type": "mandatory_direction",
+          "forbidden": [],
+          "required": [
+            "left"
+          ],
+          "allowed": [],
+          "preferred_side": null,
+          "confidence": 0.6723
+        },
+        {
+          "sign_type": "ileri_ve_sola_mecburi_yon",
+          "constraint_type": "allowed_direction",
+          "forbidden": [],
+          "required": [],
+          "allowed": [
+            "straight",
+            "left"
+          ],
+          "preferred_side": null,
+          "confidence": 0.4188
+        }
+      ],
+      "blocking_constraints": [
+        {
+          "sign_type": "sola_mecburi_yon",
+          "constraint_type": "mandatory_direction",
+          "forbidden": [],
+          "required": [
+            "left"
+          ],
+          "allowed": [],
+          "preferred_side": null,
+          "confidence": 0.6723
+        },
+        {
+          "sign_type": "ileri_ve_sola_mecburi_yon",
+          "constraint_type": "allowed_direction",
+          "forbidden": [],
+          "required": [],
+          "allowed": [
+            "straight",
+            "left"
+          ],
+          "preferred_side": null,
+          "confidence": 0.4188
+        }
+      ],
+      "non_blocking_constraints": [],
+      "constraint_age_s": 0.324,
+      "debug_reason": "ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+      "debug": {
+        "stopline": "TL_STOPLINE_SELECTED:id=carla_tl_943_wp_0_road_0_lane_3,dist=14.25,target=12.25,lat=4.62,road_id=0,lane_id=3,lane_match=1,road_match=1,route_connected_match=0,route_valid=1,selection_reject_reason=None",
+        "right_hand_traffic": true
+      }
+    },
+    "route_decision_status": "blocked",
+    "route_decision_reason": "ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+    "reason": "route_constraint_wait:ROUTE_CONSTRAINT_BLOCKED:ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED|DECISION_NORMALIZED_STOP|TL_DECISION_NORMALIZED_SHOULD_STOP",
+    "debug_state": {
+      "traffic_light_state": "unknown",
+      "tl_state_machine_state": "APPROACHING_TL",
+      "tl_rule": null
+    },
+    "debug_policy": {
+      "path_x_center": 0.5,
+      "path_half_width_top": 0.14,
+      "path_half_width_bottom": 0.34,
+      "person_stop_bottom_ratio": 0.58,
+      "stop_distance": 3.0,
+      "slow_distance": 8.0
+    },
+    "speed_limit_active_kmh": 30.0,
+    "_logger_stamp": 1779926147.3318274
+  },
+  "last_control": {
+    "stamp": 1779926147.4773126,
+    "mission_stage": "GO_TO_TASK",
+    "task_index": 1,
+    "target_name": "planner_local_gorev_2",
+    "target_is_planner_local": true,
+    "planner_local_as_destination": true,
+    "distance_to_target_m": 2.997,
+    "target_speed_mps": 0.0,
+    "target_speed_kmh": 0.0,
+    "current_speed_mps": 0.0,
+    "current_speed_kmh": 0.0,
+    "throttle": 0.0,
+    "brake": 1.0,
+    "steer": 0.0,
+    "route_status": "basic_agent_route_to:planner_local_gorev_2",
+    "driver_only_decision_mode": true,
+    "planner_enabled": true,
+    "planner_target_fresh": true,
+    "planner_target_age_s": 0.084,
+    "planner_route_id": 2,
+    "lane": {
+      "enabled": true,
+      "used": false,
+      "reason": "LANE_KEEP_FALLBACK_ROUTE_CENTER:lane_not_detected",
+      "basic_steer": 0.068,
+      "final_steer": 0.068,
+      "lane_confidence": 0.0,
+      "lane_steer": -0.0105,
+      "lane_offset_norm": -0.0349,
+      "blend": 0.0
+    },
+    "decision_should_stop": true,
+    "decision_emergency_brake": false,
+    "decision_stop_reason": "route_constraint_wait:ROUTE_CONSTRAINT_BLOCKED:ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED",
+    "decision_stop_distance_m": 12.247,
+    "decision_tl_state_machine_state": "APPROACHING_TL",
+    "decision_stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+    "decision_stop_target_dist_m": 12.247,
+    "tl_stop_hold_active": true,
+    "tl_hold_valid": false,
+    "tl_hold_source": "decision_tl_stop",
+    "tl_hold_age_s": 0.146,
+    "tl_hold_stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+    "active_stopline_id": "carla_tl_943_wp_0_road_0_lane_3",
+    "active_stopline_route_valid": true,
+    "tl_hold_invalid_reason": "state_not_hold",
+    "release_confirmed_green": false,
+    "route_blocked": false,
+    "traffic_light_state": "unknown",
+    "reason": "driver_only_structured_should_stop:route_constraint_wait:ROUTE_CONSTRAINT_BLOCKED:ROUTE_CONSTRAINT_BLOCKED:route_constraint_blocks_right:sola_mecburi_yon,ileri_ve_sola_mecburi_yon|ROUTE_REROUTE_REQUEST|ROUTE_REROUTE_FAILED|DECISION_NORMALIZED_STOP|TL_DECISION_NORMALIZED_SHOULD_STOP|STRUCTURED_SHOULD_STOP_HARD_HOLD|planner_speed_hint_cap:0.81|STRUCTURED_SHOULD_STOP_HARD_HOLD|ROUTE_AGENT_APPLY_STOP",
+    "_logger_stamp": 1779926147.4776573
+  },
+  "events": [
+    {
+      "stamp": 1779926040.0802763,
+      "event_type": "passenger_stop_started",
+      "target": {
+        "name": "gorev_1",
+        "description": "1. yolcu alma/indirme noktası - tünel/rampa kritik bölgesi",
+        "nokta_id": 1,
+        "lon": 82.29395294189453,
+        "lat": -51.71940994262695,
+        "yaw": null,
+        "carla_x": 82.29395294189453,
+        "carla_y": -51.71940994262695,
+        "carla_z": 5.7,
+        "carla_yaw": 272.02410888671875,
+        "road_id": null,
+        "lane_id": null,
+        "kind": "task",
+        "route_index": null,
+        "route_distance_m": null
+      },
+      "task_index": 0,
+      "objective_index": 0,
+      "route_index": 0,
+      "distance_m": 1.142,
+      "_logger_stamp": 1779926040.0805743
+    },
+    {
+      "stamp": 1779926055.0803838,
+      "event_type": "passenger_stop_completed",
+      "target": {
+        "name": "gorev_1",
+        "description": "1. yolcu alma/indirme noktası - tünel/rampa kritik bölgesi",
+        "nokta_id": 1,
+        "lon": 82.29395294189453,
+        "lat": -51.71940994262695,
+        "yaw": null,
+        "carla_x": 82.29395294189453,
+        "carla_y": -51.71940994262695,
+        "carla_z": 5.7,
+        "carla_yaw": 272.02410888671875,
+        "road_id": null,
+        "lane_id": null,
+        "kind": "task",
+        "route_index": null,
+        "route_distance_m": null
+      },
+      "task_index": 0,
+      "objective_index": 0,
+      "route_index": 0,
+      "stop_elapsed_s": 15.0,
+      "valid_stop_window": true,
+      "_logger_stamp": 1779926055.0807357
+    }
+  ],
+  "updated_at": 1779926147.5008657,
+  "elapsed_s": 151.374,
+  "qualification_flags": {
+    "mission_completed": false,
+    "no_collision": true,
+    "park_entry_reached": false,
+    "passenger_stops_done": 1
+  }
+}
