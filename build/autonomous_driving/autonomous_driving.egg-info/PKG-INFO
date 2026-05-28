@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: autonomous_driving
+Version: 0.1.0
+Summary: TEKNOFEST Robotaksi CARLA simulation, perception, mission, decision and control package
+Maintainer: ilker
+Maintainer-email: ilker.akbal4822@gop.edu.tr
+License: MIT
+Requires-Dist: setuptools
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: requires-dist
+Dynamic: summary
