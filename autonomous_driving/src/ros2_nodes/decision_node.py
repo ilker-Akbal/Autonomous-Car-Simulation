@@ -112,7 +112,7 @@ class DecisionNode(Node):
         self.declare_parameter("tl_green_release_min_area_ratio", 0.00030)
         self.declare_parameter("tl_green_release_min_height_ratio", 0.035)
         self.declare_parameter("tl_green_release_max_distance_m", 60.0)
-        self.declare_parameter("tl_green_release_min_count", 2)
+        self.declare_parameter("tl_green_release_min_count", 1)
         self.declare_parameter("tl_red_stop_distance_m", 12.0)
         self.declare_parameter("tl_red_crawl_distance_m", 18.0)
         self.declare_parameter("tl_red_slow_distance_m", 24.0)
@@ -1796,11 +1796,15 @@ class DecisionNode(Node):
                 self._qualified_green_count = 0
 
                 if green_latch_active:
+                    self.red_light_latch_until = 0.0
+                    self.red_light_latch_info = None
+                    self.red_light_green_seen_count = 0
+                    self.red_light_first_seen_time = 0.0
                     return {
-                        "decision": "STOP",
-                        "risk": "HIGH",
-                        "target_speed": self.stop_speed,
-                        "reason": "green_rejected_wait_for_stable_green:" + ",".join(reject_reasons),
+                        "decision": "GO",
+                        "risk": "LOW",
+                        "target_speed": self.default_go_speed,
+                        "reason": "green_light_controlled_release:" + ",".join(reject_reasons),
                     }
 
                 return {
@@ -1864,7 +1868,11 @@ class DecisionNode(Node):
             if (
                 self.tl_green_release_bypass_hold
                 and "red_light_" in prev_reason
-                and "green_light_confirmed_stable" in current_reason
+                and (
+                    "green_light_confirmed_stable" in current_reason
+                    or "green_light_controlled_release" in current_reason
+                    or "green_light_weak_not_latched_release" in current_reason
+                )
             ):
                 self.last_output_time = now
                 self.last_output = dict(output)
@@ -1879,6 +1887,17 @@ class DecisionNode(Node):
                 return held
 
         if prev_decision == "SLOW" and output["decision"] == "GO":
+            current_reason = str(output.get("reason", ""))
+            current_tl = str(output.get("traffic_light_state", "unknown")).lower().strip()
+            if (
+                current_tl == "green"
+                or "green_light_confirmed_stable" in current_reason
+                or "green_light_controlled_release" in current_reason
+                or "green_light_weak_not_latched_release" in current_reason
+            ):
+                self.last_output_time = now
+                self.last_output = dict(output)
+                return output
             if age < self.slow_hold_seconds:
                 held = dict(output)
                 held["decision"] = "SLOW"
@@ -2103,5 +2122,3 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-
-

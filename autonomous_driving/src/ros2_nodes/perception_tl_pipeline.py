@@ -33,6 +33,7 @@ class TrafficLightPipeline:
         self.node = node
         self.last_active = None
         self.last_active_time = 0.0
+        self.last_active_green_time = 0.0
 
     def norm_state(self, value):
         s = str(value or "unknown").strip().lower()
@@ -454,9 +455,34 @@ class TrafficLightPipeline:
         }
 
         if active is not None:
+            now = time.time()
+            active_state = self.norm_state(active.get("traffic_light_state"))
+            active_conf = self.as_float(active.get("state_confidence"), 0.0)
+            if active_state == "green":
+                self.last_active_green_time = now
+            elif (
+                active_state in {"red", "yellow"}
+                and now - float(getattr(self, "last_active_green_time", 0.0) or 0.0)
+                <= _env_float("TL_SUPPRESS_FLIP_AFTER_GREEN_S", 0.8)
+                and active_conf < _env_float("TL_SUPPRESS_FLIP_AFTER_GREEN_MAX_CONF", 0.90)
+            ):
+                old_state = active_state
+                active["traffic_light_state"] = "green"
+                active["traffic_light_state_confidence"] = max(active_conf, 0.65)
+                active["tl_state_confidence"] = active["traffic_light_state_confidence"]
+                active["state_confidence"] = active["traffic_light_state_confidence"]
+                active["state_conf"] = active["traffic_light_state_confidence"]
+                active["traffic_light_color_reason"] = (
+                    f"{active.get('traffic_light_color_reason', '')}"
+                    f"|tl_state_flip_suppressed_after_green:{old_state}"
+                )
+                active["traffic_light_state_source"] = (
+                    f"{active.get('traffic_light_state_source', 'unknown')}_green_debounce"
+                )
+
             active["active_traffic_light"] = True
             self.last_active = dict(active)
-            self.last_active_time = time.time()
+            self.last_active_time = now
 
             info = {
                 "state": active.get("traffic_light_state", "unknown"),

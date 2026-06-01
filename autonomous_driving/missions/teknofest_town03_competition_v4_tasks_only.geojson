@@ -50,8 +50,8 @@
         "description": "2. yolcu alma/indirme noktası - tünel sonrası alt bölge",
         "nokta_id": 2,
         "town": "Town03",
-        "carla_x": 97.16707611083984,
-        "carla_y": -191.56126403808597,
+        "carla_x": 166.16707611083984,
+        "carla_y": -189.82726403808597,
         "carla_z": 0.2,
         "carla_yaw": 1.4395599365234375,
         "kind": "task"
@@ -59,8 +59,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          97.16707611083984,
-          -191.56126403808597
+          166.16707611083984,
+          -189.82726403808597
         ]
       }
     },
