@@ -195,8 +195,6 @@ class CarlaWorldManagerNode(Node):
             "sensor.*",
             "walker.pedestrian.*",
             "controller.ai.walker",
-            "static.prop.teknofest_sign*",
-            "static.prop.streetsign*",
         ]
 
         actors_to_destroy = []
@@ -223,7 +221,7 @@ class CarlaWorldManagerNode(Node):
         )
 
         commands = [
-            carla.command.DestroyActor(actor.id)
+            self.carla.command.DestroyActor(actor.id)
             for actor in actors_to_destroy
         ]
 

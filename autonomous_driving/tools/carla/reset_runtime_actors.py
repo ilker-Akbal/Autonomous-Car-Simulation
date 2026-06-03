@@ -10,8 +10,6 @@ DESTROY_PATTERNS = [
     "sensor.*",
     "walker.pedestrian.*",
     "controller.ai.walker",
-    "static.prop.teknofest_sign*",
-    "static.prop.streetsign*",
 ]
 
 

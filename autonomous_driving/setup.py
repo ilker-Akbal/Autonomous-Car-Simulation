@@ -14,7 +14,6 @@ setup(
             "share/autonomous_driving/launch",
             [
                 "launch/teknofest_carla_full.launch.py",
-                "launch/teknofest_sign_static_test.launch.py",
             ],
         ),
     ],
@@ -22,32 +21,18 @@ setup(
     zip_safe=True,
     maintainer="ilker",
     maintainer_email="ilker.akbal4822@gop.edu.tr",
-    description="TEKNOFEST Robotaksi CARLA simulation, perception, mission, decision and control package",
+    description="TEKNOFEST Robotaksi CARLA simulation and mission package",
     license="MIT",
     entry_points={
         "console_scripts": [
-            "camera_node = ros2_nodes.camera_node:main",
-            "lidar_node = ros2_nodes.lidar_node:main",
-            "perception_node = ros2_nodes.perception_node:main",
-
             "carla_world_manager_node = ros2_nodes.carla_world_manager_node:main",
-            "carla_spectator_follow_node = teknofest_sim.carla_spectator_follow_node:main",
             "carla_sensor_bridge_node = ros2_nodes.carla_sensor_bridge_node:main",
-            "carla_control_adapter_node = ros2_nodes.carla_control_adapter_node:main",
-            "carla_scenario_manager_node = ros2_nodes.carla_scenario_manager_node:main",
-            "carla_logger_node = ros2_nodes.carla_logger_node:main",
-
-            "phase1_route_node = ros2_nodes.phase1_route_node:main",
-            "phase1_lane_follower_node = ros2_nodes.phase1_lane_follower_node:main",
-            "phase1_behavior_node = ros2_nodes.phase1_behavior_node:main",
-
             "teknofest_mission_node = teknofest_sim.teknofest_mission_node:main",
-            "teknofest_scenario_node = teknofest_sim.teknofest_scenario_node:main",
-            "teknofest_evaluator_node = teknofest_sim.teknofest_evaluator_node:main",
-            "teknofest_sign_static_test_node = teknofest_sim.teknofest_sign_static_test_node:main",
-            "teknofest_sign_overlay_node = teknofest_sim.teknofest_sign_overlay_node:main",
+            "clean_lane_vision_node = ros2_nodes.clean_lane_vision_node:main",
+            "clean_phase1_driver_node = ros2_nodes.clean_phase1_driver_node:main",
+            "clean_carla_control_node = ros2_nodes.clean_carla_control_node:main",
+            "carla_spectator_follow_node = teknofest_sim.carla_spectator_follow_node:main",
             "teknofest_spectator_follow_node = teknofest_sim.teknofest_spectator_follow_node:main",
-            "teknofest_route_signs_node = teknofest_sim.teknofest_route_signs_node:main",
         ],
     },
 )

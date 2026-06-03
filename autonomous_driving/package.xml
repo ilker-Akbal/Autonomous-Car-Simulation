@@ -2,7 +2,7 @@
 <package format="3">
   <name>autonomous_driving</name>
   <version>0.1.0</version>
-  <description>TEKNOFEST Robotaksi CARLA simulation, perception, decision and control package</description>
+  <description>TEKNOFEST Robotaksi CARLA simulation and mission package</description>
 
   <maintainer email="ilker.akbal4822@gop.edu.tr">Ilker Akbal</maintainer>
   <license>MIT</license>

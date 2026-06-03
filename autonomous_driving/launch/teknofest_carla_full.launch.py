@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, TimerAction
+from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -9,43 +9,19 @@ def generate_launch_description():
     host = LaunchConfiguration("host")
     port = LaunchConfiguration("port")
     town = LaunchConfiguration("town")
-    model_path = LaunchConfiguration("model_path")
-    tl_model_path = LaunchConfiguration("tl_model_path")
-    sign_model_path = LaunchConfiguration("sign_model_path")
     mission_geojson = LaunchConfiguration("mission_geojson")
-    log_dir = LaunchConfiguration("log_dir")
+    round_name = LaunchConfiguration("round_name")
 
     return LaunchDescription([
         DeclareLaunchArgument("carla_root", default_value="/home/ilker/simulators/CARLA_0.9.15"),
         DeclareLaunchArgument("host", default_value="127.0.0.1"),
         DeclareLaunchArgument("port", default_value="2000"),
         DeclareLaunchArgument("town", default_value="Town03"),
-        DeclareLaunchArgument(
-            "model_path",
-            default_value="autonomous_driving/outputs/models/adas5_targeted_aug_finetune_from_old_img1024_b8_ep50/weights/best.pt",
-        ),
-        DeclareLaunchArgument(
-            "tl_model_path",
-            default_value="autonomous_driving/outputs/models/traffic_light_state_resnet18_carla/best.pt",
-        ),
-        DeclareLaunchArgument(
-            "sign_model_path",
-            default_value="autonomous_driving/sign_classifier/outputs_v2/sign_classifier_resnet18_v2_best.pt",
-        ),
+        DeclareLaunchArgument("round_name", default_value="round_3"),
         DeclareLaunchArgument(
             "mission_geojson",
             default_value="autonomous_driving/missions/teknofest_town03_competition_v4_tasks_only.geojson",
         ),
-        DeclareLaunchArgument("log_dir", default_value="outputs/teknofest_sim_logs"),
-
-        SetEnvironmentVariable("ADAS_HEADLESS", "1"),
-        SetEnvironmentVariable("SHOW_DEBUG", "0"),
-        SetEnvironmentVariable("MODEL_PATH", model_path),
-        SetEnvironmentVariable("TRAFFIC_LIGHT_STATE_MODEL_PATH", tl_model_path),
-        SetEnvironmentVariable("TRAFFIC_LIGHT_STATE_CLASSIFIER_ENABLED", "1"),
-        SetEnvironmentVariable("TRAFFIC_LIGHT_STATE_USE_HSV_FALLBACK", "1"),
-        SetEnvironmentVariable("SIGN_CLASSIFIER_ENABLED", "1"),
-        SetEnvironmentVariable("SIGN_CLASSIFIER_MODEL_PATH", sign_model_path),
 
         Node(
             package="autonomous_driving",
@@ -92,28 +68,26 @@ def generate_launch_description():
         ),
 
         TimerAction(
-            period=8.0,
+            period=6.0,
             actions=[
                 Node(
                     package="autonomous_driving",
-                    executable="perception_node",
-                    name="perception_node",
+                    executable="teknofest_mission_node",
+                    name="teknofest_mission_node",
                     output="screen",
                     parameters=[{
-                        "image_topic": "/adas/camera/front/image_raw",
-                        "detections_topic": "/adas/perception/detections_json",
-                        "decision_events_topic": "/adas/perception/decision_events_json",
-                        "route_constraints_topic": "/adas/perception/route_constraints_json",
-                        "annotated_topic": "/adas/perception/annotated_image",
-                        "model_path": model_path,
-                        "traffic_light_state_model_path": tl_model_path,
-                        "traffic_light_state_classifier_enabled": True,
-                        "traffic_light_state_use_hsv_fallback": True,
-                        "traffic_light_state_device": "cuda",
-                        "sign_classifier_enabled": True,
-                        "sign_classifier_model_path": sign_model_path,
-                        "show_debug": False,
-                        "imgsz": 960,
+                        "carla_root": carla_root,
+                        "host": host,
+                        "port": port,
+                        "timeout": 120.0,
+                        "ego_role_name": "ego_vehicle",
+                        "mission_geojson": mission_geojson,
+                        "round_name": round_name,
+                        "competition_mode": True,
+                        "gnss_topic": "/adas/localization/gnss",
+                        "mission_topic": "/adas/teknofest/mission",
+                        "event_topic": "/adas/teknofest/events",
+                        "point_pass_tolerance_m": 2.5,
                     }],
                 ),
             ],
@@ -124,32 +98,25 @@ def generate_launch_description():
             actions=[
                 Node(
                     package="autonomous_driving",
-                    executable="phase1_route_node",
-                    name="phase1_route_node",
+                    executable="clean_lane_vision_node",
+                    name="clean_lane_vision_node",
                     output="screen",
                     parameters=[{
-                        "carla_root": carla_root,
-                        "host": host,
-                        "port": port,
-                        "timeout": 120.0,
-                        "ego_role_name": "ego_vehicle",
-                        "mission_geojson": mission_geojson,
-                        "competition_mode": False,
-                        "route_topic": "/adas/phase1/route",
-                        "lookahead_distance_m": 8.0,
-                        "prefer_right_lane": True,
+                        "image_topic": "/adas/camera/front/image_raw",
+                        "vision_topic": "/adas/phase1/lane_vision_json",
+                        "debug_image_topic": "/adas/phase1/lane_vision_debug_image",
                     }],
                 ),
             ],
         ),
 
         TimerAction(
-            period=9.0,
+            period=7.5,
             actions=[
                 Node(
                     package="autonomous_driving",
-                    executable="phase1_lane_follower_node",
-                    name="phase1_lane_follower_node",
+                    executable="clean_phase1_driver_node",
+                    name="clean_phase1_driver_node",
                     output="screen",
                     parameters=[{
                         "carla_root": carla_root,
@@ -157,20 +124,25 @@ def generate_launch_description():
                         "port": port,
                         "timeout": 120.0,
                         "ego_role_name": "ego_vehicle",
-                        "route_topic": "/adas/phase1/route",
-                        "lane_command_topic": "/adas/phase1/lane_command",
+                        "command_topic": "/adas/phase1/command",
+                        "mission_topic": "/adas/teknofest/mission",
+                        "sign_facts_topic": "/adas/phase1/sign_facts_json",
+                        "lane_vision_topic": "/adas/phase1/lane_vision_json",
+                        "lookahead_m": 8.0,
+                        "cruise_speed_mps": 5.8,
+                        "turn_speed_mps": 3.2,
                     }],
                 ),
             ],
         ),
 
         TimerAction(
-            period=10.0,
+            period=8.0,
             actions=[
                 Node(
                     package="autonomous_driving",
-                    executable="phase1_behavior_node",
-                    name="phase1_behavior_node",
+                    executable="clean_carla_control_node",
+                    name="clean_carla_control_node",
                     output="screen",
                     parameters=[{
                         "carla_root": carla_root,
@@ -178,50 +150,30 @@ def generate_launch_description():
                         "port": port,
                         "timeout": 120.0,
                         "ego_role_name": "ego_vehicle",
-                        "route_topic": "/adas/phase1/route",
-                        "lane_command_topic": "/adas/phase1/lane_command",
-                        "perception_events_topic": "/adas/perception/decision_events_json",
-                        "behavior_topic": "/adas/phase1/behavior",
-                        "base_speed_mps": 6.0,
+                        "command_topic": "/adas/phase1/command",
                     }],
                 ),
             ],
         ),
 
         TimerAction(
-            period=11.0,
+            period=8.5,
             actions=[
                 Node(
                     package="autonomous_driving",
-                    executable="carla_control_adapter_node",
-                    name="carla_control_adapter_node",
+                    executable="teknofest_spectator_follow_node",
+                    name="teknofest_spectator_follow_node",
                     output="screen",
                     parameters=[{
-                        "carla_root": carla_root,
                         "host": host,
                         "port": port,
-                        "timeout": 120.0,
-                        "ego_role_name": "ego_vehicle",
-                        "behavior_topic": "/adas/phase1/behavior",
-                        "debug_topic": "/adas/carla/control_debug",
+                        "distance_m": 8.0,
+                        "height_m": 3.2,
+                        "target_forward_m": 3.0,
+                        "target_height_m": 1.2,
+                        "timer_period_sec": 0.05,
                     }],
                 ),
             ],
-        ),
-
-        Node(
-            package="autonomous_driving",
-            executable="teknofest_spectator_follow_node",
-            name="teknofest_spectator_follow_node",
-            output="screen",
-            parameters=[{
-                "host": host,
-                "port": port,
-                "distance_m": 8.0,
-                "height_m": 3.2,
-                "target_forward_m": 3.0,
-                "target_height_m": 1.2,
-                "timer_period_sec": 0.05,
-            }],
         ),
     ])

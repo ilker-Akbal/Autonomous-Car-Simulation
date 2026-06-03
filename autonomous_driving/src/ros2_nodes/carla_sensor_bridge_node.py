@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import math
 import time
 from typing import Optional
 
-import carla
 import numpy as np
 
 import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Image, CameraInfo, NavSatFix, Imu, PointCloud2, PointField
+from teknofest_sim.carla_loader import load_carla
+
+
+carla = None
 
 
 class CarlaSensorBridgeNode(Node):
@@ -20,6 +25,7 @@ class CarlaSensorBridgeNode(Node):
         # -------------------------
         # CARLA connection params
         # -------------------------
+        self.declare_parameter("carla_root", "/home/ilker/simulators/CARLA_0.9.15")
         self.declare_parameter("host", "127.0.0.1")
         self.declare_parameter("port", 2000)
         self.declare_parameter("timeout", 10.0)
@@ -210,10 +216,14 @@ class CarlaSensorBridgeNode(Node):
 
 
     def connect_to_carla(self):
+        global carla
+
+        carla_root = str(self.get_parameter("carla_root").value)
         host = str(self.get_parameter("host").value)
         port = int(self.get_parameter("port").value)
         timeout = float(self.get_parameter("timeout").value)
 
+        carla = load_carla(carla_root)
         self.client = carla.Client(host, port)
         self.client.set_timeout(timeout)
         self.world = self.client.get_world()
