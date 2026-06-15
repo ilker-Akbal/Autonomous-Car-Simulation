@@ -1,34 +1,22 @@
-# ROS2 / colcon
+/build/
+/install/
+/log/
+/outputs/
 
-install/
-log/
-
-# Python
 __pycache__/
 *.pyc
 *.pyo
-.pytest_cache/
+*.pyd
 
-# Runtime outputs
+*.egg-info/
+
+# Eğitim/model çıktıları
+autonomous_driving/outputs/models/
 autonomous_driving/outputs/teknofest_sim_logs/
-*.log
+autonomous_driving/sign_classifier/
 
-# Archives / temporary
-*.tar.gz
-*.zip
-*.bak
-*.orig
-*.rej
-*.diff
-*.patch
-
-# Large model files - Git LFS kullanılacaksa ayrıca track edilir
+# Büyük model dosyaları
 *.pt
 *.pth
 *.onnx
 *.engine
-
-# Editors
-.vscode/
-.idea/
-.DS_Store
