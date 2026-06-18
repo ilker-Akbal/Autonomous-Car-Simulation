@@ -8,6 +8,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import String
 
+from teknofest_common.runtime_logging import RuntimeJsonlLogger
 from teknofest_sim.carla_loader import load_carla
 from teknofest_sim.geojson_mission import (
     haversine_meters,
@@ -54,6 +55,8 @@ class TeknofestMissionNode(Node):
         # erken başlıyor. Görev/task duruşu için daha sıkı tolerans kullan.
         self.declare_parameter("task_stop_tolerance_m", 1.15)
         self.declare_parameter("park_entry_tolerance_m", -1.0)
+        self.declare_parameter("distance_reference", "front_bumper")
+        self.declare_parameter("front_bumper_offset_m", -1.0)
 
         # Yolcu indirme/bindirme şartname aralığı.
         self.declare_parameter("passenger_stop_min_s", 15.0)
@@ -73,6 +76,10 @@ class TeknofestMissionNode(Node):
         self.declare_parameter("port", 2000)
         self.declare_parameter("timeout", 120.0)
         self.declare_parameter("ego_role_name", "ego_vehicle")
+        self.declare_parameter("log_root", "autonomous_driving/outputs/teknofest_sim_logs")
+        self.declare_parameter("log_session_id", "")
+        self.declare_parameter("jsonl_logging_enabled", True)
+        self.declare_parameter("ros_log_period_s", 1.0)
 
         self.mission_geojson = str(self.get_parameter("mission_geojson").value)
         self.round_name = str(self.get_parameter("round_name").value)
@@ -87,6 +94,8 @@ class TeknofestMissionNode(Node):
         self.park_entry_tolerance_m = float(self.get_parameter("park_entry_tolerance_m").value)
         if self.park_entry_tolerance_m < 0.0:
             self.park_entry_tolerance_m = self.point_pass_tolerance_m
+        self.distance_reference = str(self.get_parameter("distance_reference").value)
+        self.front_bumper_offset_m = float(self.get_parameter("front_bumper_offset_m").value)
         self.passenger_stop_min_s = float(self.get_parameter("passenger_stop_min_s").value)
         self.passenger_stop_max_s = float(self.get_parameter("passenger_stop_max_s").value)
         self.park_time_limit_s = float(self.get_parameter("park_time_limit_s").value)
@@ -100,6 +109,7 @@ class TeknofestMissionNode(Node):
         self.port = int(self.get_parameter("port").value)
         self.timeout = float(self.get_parameter("timeout").value)
         self.ego_role_name = str(self.get_parameter("ego_role_name").value)
+        self.ros_log_period_s = float(self.get_parameter("ros_log_period_s").value)
 
         self.mission = load_mission_geojson(
             self.mission_geojson,
@@ -115,6 +125,16 @@ class TeknofestMissionNode(Node):
         self.world = None
         self.ego = None
         self.last_ego_lookup_s = 0.0
+        self.last_ros_log_s = 0.0
+        self.last_distance_reference_used = "unknown"
+
+        self.runtime_logger = RuntimeJsonlLogger(
+            node_name="teknofest_mission_node",
+            file_name="mission_runtime.jsonl",
+            log_root=str(self.get_parameter("log_root").value),
+            session_id=str(self.get_parameter("log_session_id").value) or None,
+            enabled=bool(self.get_parameter("jsonl_logging_enabled").value),
+        )
 
         if self.use_carla_xy_distance:
             self.connect_to_carla()
@@ -217,6 +237,60 @@ class TeknofestMissionNode(Node):
         except Exception:
             return None
 
+    def current_carla_transform(self):
+        ego = self.find_ego()
+
+        if ego is None:
+            return None
+
+        try:
+            return ego.get_transform()
+        except Exception:
+            return None
+
+    def current_speed_mps(self):
+        ego = self.find_ego()
+        if ego is None:
+            return None
+
+        try:
+            velocity = ego.get_velocity()
+            return math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+        except Exception:
+            return None
+
+    def front_bumper_offset(self):
+        if self.front_bumper_offset_m > 0.0:
+            return self.front_bumper_offset_m
+
+        ego = self.find_ego()
+        if ego is not None:
+            try:
+                return float(ego.bounding_box.extent.x)
+            except Exception:
+                pass
+
+        return 1.35
+
+    def current_carla_reference_location(self):
+        transform = self.current_carla_transform()
+        if transform is None:
+            return None
+
+        if self.distance_reference != "front_bumper":
+            self.last_distance_reference_used = "vehicle_origin"
+            return transform.location
+
+        yaw = math.radians(float(transform.rotation.yaw))
+        offset = self.front_bumper_offset()
+        self.last_distance_reference_used = "front_bumper"
+
+        return self.carla.Location(
+            x=float(transform.location.x) + math.cos(yaw) * offset,
+            y=float(transform.location.y) + math.sin(yaw) * offset,
+            z=float(transform.location.z),
+        )
+
     def publish_event(self, event_type: str, payload: dict):
         msg = String()
         data = {
@@ -315,7 +389,7 @@ class TeknofestMissionNode(Node):
             and target.carla_x is not None
             and target.carla_y is not None
         ):
-            loc = self.current_carla_location()
+            loc = self.current_carla_reference_location()
 
             if loc is not None:
                 return math.hypot(
@@ -370,6 +444,17 @@ class TeknofestMissionNode(Node):
             self.stage = "GO_TO_PARK"
         else:
             self.stage = "GO_TO_TASK"
+
+        next_target = self.current_objective_point()
+        self.publish_event(
+            "mission_released_to_next_objective",
+            {
+                "next_target": asdict(next_target),
+                "next_objective_index": self.objective_index,
+                "next_stage": self.stage,
+                "must_stop": False,
+            },
+        )
 
     def start_parking_stage(self, target, dist, now):
         self.stage = "PARKING"
@@ -465,6 +550,10 @@ class TeknofestMissionNode(Node):
             "route_kind": kind,
             "target": asdict(target),
             "distance_to_target_m": round(dist, 3) if dist is not None else None,
+            "distance_reference": self.last_distance_reference_used,
+            "task_stop_tolerance_m": self.task_stop_tolerance_m,
+            "front_bumper_offset_m": round(self.front_bumper_offset(), 3)
+            if self.use_carla_xy_distance else None,
 
             # Yeni planner uyumluluğu.
             "objective_index": self.objective_index,
@@ -483,6 +572,41 @@ class TeknofestMissionNode(Node):
         msg = String()
         msg.data = json.dumps(out, ensure_ascii=False)
         self.pub.publish(msg)
+        self.log_runtime(out)
+
+    def log_runtime(self, payload: dict):
+        target = payload.get("objective_target") or {}
+        loc = self.current_carla_reference_location()
+        transform = self.current_carla_transform()
+        speed_mps = self.current_speed_mps()
+        record = {
+            "ego_x": round(float(loc.x), 4) if loc is not None else None,
+            "ego_y": round(float(loc.y), 4) if loc is not None else None,
+            "ego_yaw": round(float(transform.rotation.yaw), 4) if transform is not None else None,
+            "current_speed_mps": round(float(speed_mps), 4) if speed_mps is not None else None,
+            "active_mission_target": target.get("name"),
+            "mission_state": payload.get("stage"),
+            "route_index": payload.get("objective_index"),
+            "distance_to_goal_m": payload.get("distance_to_objective_m"),
+            "distance_reference": payload.get("distance_reference"),
+            "task_stop_tolerance_m": payload.get("task_stop_tolerance_m"),
+            "front_bumper_offset_m": payload.get("front_bumper_offset_m"),
+            "must_stop": payload.get("must_stop"),
+            "passenger_stop_elapsed_s": payload.get("passenger_stop_elapsed_s"),
+            "completed": payload.get("completed"),
+        }
+        self.runtime_logger.write(record)
+
+        now = time.time()
+        if now - self.last_ros_log_s >= self.ros_log_period_s:
+            self.last_ros_log_s = now
+            self.get_logger().info(
+                "mission_runtime "
+                f"state={record['mission_state']} target={record['active_mission_target']} "
+                f"idx={record['route_index']} dist={record['distance_to_goal_m']} "
+                f"ref={record['distance_reference']} must_stop={record['must_stop']} "
+                f"elapsed={record['passenger_stop_elapsed_s']}"
+            )
 
 
 def main(args=None):

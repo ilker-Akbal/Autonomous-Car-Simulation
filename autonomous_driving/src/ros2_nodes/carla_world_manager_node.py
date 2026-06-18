@@ -48,6 +48,7 @@ class CarlaWorldManagerNode(Node):
         self.declare_parameter("set_spectator", True)
         self.declare_parameter("enable_sync_mode", False)
         self.declare_parameter("fixed_delta_seconds", 0.05)
+        self.declare_parameter("status_period_s", 0.1)
 
         self.carla_root = self.get_parameter("carla_root").value
         self.host = self.get_parameter("host").value
@@ -61,6 +62,7 @@ class CarlaWorldManagerNode(Node):
         self.set_spectator = bool(self.get_parameter("set_spectator").value)
         self.enable_sync_mode = bool(self.get_parameter("enable_sync_mode").value)
         self.fixed_delta_seconds = float(self.get_parameter("fixed_delta_seconds").value)
+        self.status_period_s = float(self.get_parameter("status_period_s").value)
 
         self.carla = load_carla(self.carla_root)
         self.client = self.carla.Client(self.host, self.port)
@@ -83,7 +85,7 @@ class CarlaWorldManagerNode(Node):
             self.move_spectator_to_ego()
 
         self.status_pub = self.create_publisher(String, "/adas/carla/status", 10)
-        self.timer = self.create_timer(1.0, self.publish_status)
+        self.timer = self.create_timer(self.status_period_s, self.publish_status)
 
         self.get_logger().info("CARLA world manager hazır")
         self.get_logger().info(f"map={self.world.get_map().name}")

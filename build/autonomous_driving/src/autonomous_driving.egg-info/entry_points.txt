@@ -1,21 +1,14 @@
 [console_scripts]
-camera_node = ros2_nodes.camera_node:main
-carla_control_adapter_node = ros2_nodes.carla_control_adapter_node:main
-carla_logger_node = ros2_nodes.carla_logger_node:main
-carla_scenario_manager_node = ros2_nodes.carla_scenario_manager_node:main
+carla_control_adapter_node = teknofest_control.carla_control_adapter_node:main
 carla_sensor_bridge_node = ros2_nodes.carla_sensor_bridge_node:main
 carla_spectator_follow_node = teknofest_sim.carla_spectator_follow_node:main
 carla_world_manager_node = ros2_nodes.carla_world_manager_node:main
-lidar_node = ros2_nodes.lidar_node:main
-perception_node = ros2_nodes.perception_node:main
-phase1_behavior_node = ros2_nodes.phase1_behavior_node:main
-phase1_lane_follower_node = ros2_nodes.phase1_lane_follower_node:main
-phase1_route_node = ros2_nodes.phase1_route_node:main
-teknofest_evaluator_node = teknofest_sim.teknofest_evaluator_node:main
+control_node = teknofest_control.control_node:main
+lane_follower_node = teknofest_planning.lane_follower_node:main
+route_planner_node = teknofest_planning.route_planner_node:main
 teknofest_mission_node = teknofest_sim.teknofest_mission_node:main
-teknofest_route_signs_node = teknofest_sim.teknofest_route_signs_node:main
-teknofest_scenario_node = teknofest_sim.teknofest_scenario_node:main
-teknofest_sign_overlay_node = teknofest_sim.teknofest_sign_overlay_node:main
-teknofest_sign_static_test_node = teknofest_sim.teknofest_sign_static_test_node:main
 teknofest_spectator_follow_node = teknofest_sim.teknofest_spectator_follow_node:main
+traffic_light_detector_node = teknofest_perception.traffic_light_detector_node:main
+traffic_light_manager_node = teknofest_planning.traffic_light_manager_node:main
+traffic_light_stopline_detector_node = teknofest_perception.traffic_light_stopline_detector_node:main
 

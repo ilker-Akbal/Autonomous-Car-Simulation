@@ -1,22 +1,12 @@
 /build/
 /install/
 /log/
-/outputs/
 
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
 *.egg-info/
 
-# Eğitim/model çıktıları
-autonomous_driving/outputs/models/
+# Runtime loglar git'e girmesin
 autonomous_driving/outputs/teknofest_sim_logs/
-autonomous_driving/sign_classifier/
-
-# Büyük model dosyaları
-*.pt
-*.pth
-*.onnx
-*.engine
