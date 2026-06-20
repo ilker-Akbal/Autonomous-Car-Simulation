@@ -101,10 +101,8 @@ class SpeedProfilePlanner:
         return target, False, "lead_vehicle_clear"
 
     def nominal_profile(self, current_speed_mps: float, desired_speed_mps: float) -> tuple[float, bool, str]:
-        current_speed = max(0.0, float(current_speed_mps))
         desired_speed = max(0.0, float(desired_speed_mps))
-        accel_limited = min(desired_speed, current_speed + self.max_accel_mps2 * 0.1)
-        return accel_limited, False, "nominal_cruise"
+        return desired_speed, False, "nominal_cruise"
 
     def _smooth_target(self, target_speed_mps: float) -> float:
         target = max(0.0, float(target_speed_mps))

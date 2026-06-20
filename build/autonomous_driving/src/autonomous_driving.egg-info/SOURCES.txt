@@ -1,8 +1,10 @@
 package.xml
 setup.cfg
 setup.py
+config/captured_tl_waypoints.json
 launch/teknofest_carla_full.launch.py
 launch/teknofest_lane_control.launch.py
+launch/teknofest_perception_advisory.launch.py
 missions/teknofest_round3.geojson
 missions/teknofest_round3_town10_current.geojson
 missions/teknofest_town03_competition_full.geojson
@@ -35,13 +37,19 @@ src/teknofest_control/pure_pursuit.py
 src/teknofest_control/speed_pid.py
 src/teknofest_debug/__init__.py
 src/teknofest_perception/__init__.py
+src/teknofest_perception/carla_viewport_overlay_node.py
+src/teknofest_perception/perception_advisory_visualizer_node.py
 src/teknofest_perception/traffic_light_detector_node.py
 src/teknofest_perception/traffic_light_distance_estimator.py
 src/teknofest_perception/traffic_light_stopline_detector_node.py
+src/teknofest_perception/traffic_sign_detector_node.py
 src/teknofest_planning/__init__.py
+src/teknofest_planning/behavior_supervisor_node.py
 src/teknofest_planning/lane_follower_node.py
 src/teknofest_planning/lane_policy.py
+src/teknofest_planning/route_event_finder.py
 src/teknofest_planning/route_planner_node.py
+src/teknofest_planning/speed_profile.py
 src/teknofest_planning/traffic_light_manager_node.py
 src/teknofest_planning/traffic_light_state_machine.py
 src/teknofest_safety/__init__.py
@@ -51,3 +59,4 @@ src/teknofest_sim/carla_spectator_follow_node.py
 src/teknofest_sim/geojson_mission.py
 src/teknofest_sim/teknofest_mission_node.py
 src/teknofest_sim/teknofest_spectator_follow_node.py
+src/teknofest_sim/viewport_camera_follow_node.py

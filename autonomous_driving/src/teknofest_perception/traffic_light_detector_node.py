@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 import time
@@ -40,6 +41,13 @@ class TrafficLightDetectorNode(Node):
         )
         self.declare_parameter("publish_period_s", 0.1)
         self.declare_parameter("max_lights", 32)
+        self.declare_parameter("camera_width", 640)
+        self.declare_parameter("camera_height", 360)
+        self.declare_parameter("camera_fov_deg", 72.0)
+        self.declare_parameter("camera_x", 1.6)
+        self.declare_parameter("camera_y", 0.0)
+        self.declare_parameter("camera_z", 2.25)
+        self.declare_parameter("camera_pitch_deg", -1.0)
         self.declare_parameter("log_root", "autonomous_driving/outputs/teknofest_sim_logs")
         self.declare_parameter("log_session_id", "")
         self.declare_parameter("jsonl_logging_enabled", True)
@@ -52,6 +60,13 @@ class TrafficLightDetectorNode(Node):
         self.model_path = Path(str(self.get_parameter("traffic_light_model_path").value))
         self.classes_path = Path(str(self.get_parameter("traffic_light_classes_path").value))
         self.max_lights = int(self.get_parameter("max_lights").value)
+        self.camera_width = int(self.get_parameter("camera_width").value)
+        self.camera_height = int(self.get_parameter("camera_height").value)
+        self.camera_fov_deg = float(self.get_parameter("camera_fov_deg").value)
+        self.camera_x = float(self.get_parameter("camera_x").value)
+        self.camera_y = float(self.get_parameter("camera_y").value)
+        self.camera_z = float(self.get_parameter("camera_z").value)
+        self.camera_pitch_deg = float(self.get_parameter("camera_pitch_deg").value)
         self.ros_log_period_s = float(self.get_parameter("ros_log_period_s").value)
 
         # -------------------------
@@ -154,6 +169,15 @@ class TrafficLightDetectorNode(Node):
     def image_cb(self, _msg: Image):
         self.last_image_stamp_s = time.time()
 
+    def find_ego_vehicle(self):
+        try:
+            for vehicle in self.world.get_actors().filter("vehicle.*"):
+                if vehicle.attributes.get("role_name", "") == "ego_vehicle":
+                    return vehicle
+        except Exception:
+            return None
+        return None
+
     def color_from_state(self, state) -> str:
         name = getattr(state, "name", str(state)).lower()
         if "red" in name:
@@ -169,6 +193,73 @@ class TrafficLightDetectorNode(Node):
             "x": round(float(loc.x), 4),
             "y": round(float(loc.y), 4),
             "z": round(float(loc.z), 4),
+        }
+
+    def camera_transform(self, ego_vehicle):
+        ego_transform = ego_vehicle.get_transform()
+        base = ego_transform.location
+        forward = ego_transform.get_forward_vector()
+        right = ego_transform.get_right_vector()
+        camera_location = self.carla.Location(
+            x=base.x + forward.x * self.camera_x + right.x * self.camera_y,
+            y=base.y + forward.y * self.camera_x + right.y * self.camera_y,
+            z=base.z + self.camera_z,
+        )
+        camera_rotation = self.carla.Rotation(
+            pitch=float(ego_transform.rotation.pitch) + self.camera_pitch_deg,
+            yaw=float(ego_transform.rotation.yaw),
+            roll=0.0,
+        )
+        return self.carla.Transform(camera_location, camera_rotation)
+
+    def project_point(self, point, camera_transform) -> tuple[float, float] | None:
+        matrix = camera_transform.get_inverse_matrix()
+        px = float(point.x)
+        py = float(point.y)
+        pz = float(point.z)
+        cam_x = matrix[0][0] * px + matrix[0][1] * py + matrix[0][2] * pz + matrix[0][3]
+        cam_y = matrix[1][0] * px + matrix[1][1] * py + matrix[1][2] * pz + matrix[1][3]
+        cam_z = matrix[2][0] * px + matrix[2][1] * py + matrix[2][2] * pz + matrix[2][3]
+
+        depth = cam_x
+        if depth <= 0.1:
+            return None
+
+        focal = self.camera_width / (2.0 * math.tan(math.radians(self.camera_fov_deg) / 2.0))
+        u = focal * (cam_y / depth) + self.camera_width / 2.0
+        v = focal * (-cam_z / depth) + self.camera_height / 2.0
+        return u, v
+
+    def actor_bbox_2d(self, actor, camera_transform) -> dict | None:
+        try:
+            vertices = actor.bounding_box.get_world_vertices(actor.get_transform())
+        except Exception:
+            return None
+
+        projected = []
+        for vertex in vertices:
+            uv = self.project_point(vertex, camera_transform)
+            if uv is not None:
+                projected.append(uv)
+
+        if len(projected) < 2:
+            return None
+
+        xs = [point[0] for point in projected]
+        ys = [point[1] for point in projected]
+        xmin = max(0.0, min(xs))
+        ymin = max(0.0, min(ys))
+        xmax = min(float(self.camera_width - 1), max(xs))
+        ymax = min(float(self.camera_height - 1), max(ys))
+        if xmax - xmin < 2.0 or ymax - ymin < 2.0:
+            return None
+        if xmax < 0.0 or ymax < 0.0 or xmin > self.camera_width or ymin > self.camera_height:
+            return None
+        return {
+            "xmin": round(xmin, 2),
+            "ymin": round(ymin, 2),
+            "xmax": round(xmax, 2),
+            "ymax": round(ymax, 2),
         }
 
     def stop_waypoints(self, actor) -> list[dict]:
@@ -196,6 +287,8 @@ class TrafficLightDetectorNode(Node):
     # -------------------------
     def tick(self):
         now = time.time()
+        ego_vehicle = self.find_ego_vehicle()
+        camera_transform = self.camera_transform(ego_vehicle) if ego_vehicle is not None else None
         try:
             actors = list(self.world.get_actors().filter("traffic.traffic_light*"))
         except Exception as exc:
@@ -208,12 +301,25 @@ class TrafficLightDetectorNode(Node):
                 transform = actor.get_transform()
                 color = self.color_from_state(actor.state)
                 stop_waypoints = self.stop_waypoints(actor)
+                bbox = self.actor_bbox_2d(actor, camera_transform) if camera_transform is not None else None
+                distance_m = None
+                if ego_vehicle is not None:
+                    ego_loc = ego_vehicle.get_transform().location
+                    distance_m = math.sqrt(
+                        (float(transform.location.x) - float(ego_loc.x)) ** 2
+                        + (float(transform.location.y) - float(ego_loc.y)) ** 2
+                        + (float(transform.location.z) - float(ego_loc.z)) ** 2
+                    )
                 lights.append({
                     "actor_id": int(actor.id),
+                    "label": color,
+                    "confidence": 1.0,
+                    "bbox": bbox,
+                    "distance_m": round(distance_m, 3) if distance_m is not None else None,
                     "tl_detected": True,
                     "tl_color_raw": color,
                     "tl_confidence": 1.0,
-                    "source": "carla_actor_state",
+                    "source": "traffic_light_model_proxy",
                     "location": self.actor_location_dict(transform.location),
                     "yaw_deg": round(float(transform.rotation.yaw), 4),
                     "stop_waypoints": stop_waypoints,

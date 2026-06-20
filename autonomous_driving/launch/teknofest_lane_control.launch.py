@@ -4,6 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -16,6 +17,7 @@ def generate_launch_description():
     ego_role_name = LaunchConfiguration("ego_role_name")
     log_root = LaunchConfiguration("log_root")
     log_session_id = LaunchConfiguration("log_session_id")
+    log_session_id_value = ParameterValue(log_session_id, value_type=str)
     generated_log_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     return LaunchDescription([
@@ -101,7 +103,7 @@ def generate_launch_description():
                         "task_stop_tolerance_m": 1.0,
                         "distance_reference": "front_bumper",
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
@@ -125,7 +127,7 @@ def generate_launch_description():
                         "route_topic": "/adas/planning/route",
                         "sampling_resolution_m": 1.2,
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
@@ -183,7 +185,7 @@ def generate_launch_description():
                         "speed_setpoint_accel_mps2": 1.1,
                         "speed_setpoint_decel_mps2": 1.0,
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
@@ -206,7 +208,7 @@ def generate_launch_description():
                         "host": host,
                         "port": port,
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
@@ -228,7 +230,7 @@ def generate_launch_description():
                         "mission_topic": "/adas/teknofest/mission",
                         "tl_event_topic": "/adas/planning/tl_event",
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
@@ -267,7 +269,7 @@ def generate_launch_description():
                         "speed_setpoint_decel_mps2": 1.0,
                         "throttle_slew_rate_per_s": 1.0,
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
@@ -291,7 +293,7 @@ def generate_launch_description():
                         "command_hold_s": 0.7,
                         "command_timeout_s": 3.0,
                         "log_root": log_root,
-                        "log_session_id": log_session_id,
+                        "log_session_id": log_session_id_value,
                     }],
                 ),
             ],
