@@ -25,11 +25,39 @@ def generate_launch_description():
 
     # Phase2 args
     target_speed_mps = LaunchConfiguration("target_speed_mps")
+    cruise_speed_mps = LaunchConfiguration("cruise_speed_mps")
+    max_speed_mps = LaunchConfiguration("max_speed_mps")
+    min_turn_speed_mps = LaunchConfiguration("min_turn_speed_mps")
+    sharp_turn_yaw_deg = LaunchConfiguration("sharp_turn_yaw_deg")
+    moderate_turn_yaw_deg = LaunchConfiguration("moderate_turn_yaw_deg")
+    speed_slew_up_mps_per_s = LaunchConfiguration("speed_slew_up_mps_per_s")
+    speed_slew_down_mps_per_s = LaunchConfiguration("speed_slew_down_mps_per_s")
+    dynamic_lookahead_enabled = LaunchConfiguration("dynamic_lookahead_enabled")
+    base_lookahead_m = LaunchConfiguration("base_lookahead_m")
+    lookahead_gain = LaunchConfiguration("lookahead_gain")
+    min_lookahead_m = LaunchConfiguration("min_lookahead_m")
+    min_speed_for_throttle_floor_mps = LaunchConfiguration("min_speed_for_throttle_floor_mps")
+    throttle_floor_when_moving = LaunchConfiguration("throttle_floor_when_moving")
+    uphill_speed_error_boost = LaunchConfiguration("uphill_speed_error_boost")
+    throttle_slew_limit = LaunchConfiguration("throttle_slew_limit")
+    integral_limit = LaunchConfiguration("integral_limit")
     route_horizon_m = LaunchConfiguration("route_horizon_m")
     route_step_m = LaunchConfiguration("route_step_m")
     enable_phase2_drive = LaunchConfiguration("enable_phase2_drive")
     max_throttle = LaunchConfiguration("max_throttle")
     max_brake = LaunchConfiguration("max_brake")
+
+
+    # Phase 2B tuning LaunchConfigurations
+    max_lookahead_m = LaunchConfiguration("max_lookahead_m")
+
+
+    # Auto-added missing launch configurations
+    carla_root = LaunchConfiguration("carla_root")
+    host = LaunchConfiguration("host")
+    port = LaunchConfiguration("port")
+    town = LaunchConfiguration("town")
+    ego_role_name = LaunchConfiguration("ego_role_name")
 
     return LaunchDescription([
         DeclareLaunchArgument("zed_enabled", default_value="false"),
@@ -48,11 +76,34 @@ def generate_launch_description():
         DeclareLaunchArgument("tick_rate_hz", default_value="20.0"),
 
         DeclareLaunchArgument("target_speed_mps", default_value="2.5"),
-        DeclareLaunchArgument("route_horizon_m", default_value="80.0"),
-        DeclareLaunchArgument("route_step_m", default_value="2.0"),
+        DeclareLaunchArgument("cruise_speed_mps", default_value="4.5"),
+        DeclareLaunchArgument("max_speed_mps", default_value="6.0"),
+        DeclareLaunchArgument("min_turn_speed_mps", default_value="2.0"),
+        DeclareLaunchArgument("sharp_turn_yaw_deg", default_value="45.0"),
+        DeclareLaunchArgument("moderate_turn_yaw_deg", default_value="18.0"),
+        DeclareLaunchArgument("speed_slew_up_mps_per_s", default_value="0.8"),
+        DeclareLaunchArgument("speed_slew_down_mps_per_s", default_value="2.0"),
+        DeclareLaunchArgument("dynamic_lookahead_enabled", default_value="true"),
+        DeclareLaunchArgument("min_lookahead_m", default_value="4.5"),
+        DeclareLaunchArgument("max_lookahead_m", default_value="14.0"),
+        DeclareLaunchArgument("base_lookahead_m", default_value="5.0"),
+        DeclareLaunchArgument("lookahead_gain", default_value="1.2"),
+        DeclareLaunchArgument("min_speed_for_throttle_floor_mps", default_value="0.5"),
+        DeclareLaunchArgument("throttle_floor_when_moving", default_value="0.12"),
+        DeclareLaunchArgument("uphill_speed_error_boost", default_value="0.10"),
+        DeclareLaunchArgument("throttle_slew_limit", default_value="0.04"),
+        DeclareLaunchArgument("integral_limit", default_value="3.0"),
         DeclareLaunchArgument("enable_phase2_drive", default_value="true"),
         DeclareLaunchArgument("max_throttle", default_value="0.45"),
         DeclareLaunchArgument("max_brake", default_value="0.75"),
+
+        DeclareLaunchArgument("carla_root", default_value="/home/ilker/simulators/CARLA_0.9.15"),
+        DeclareLaunchArgument("host", default_value="127.0.0.1"),
+        DeclareLaunchArgument("port", default_value="2000"),
+        DeclareLaunchArgument("town", default_value="Town03"),
+        DeclareLaunchArgument("ego_role_name", default_value="ego_vehicle"),
+        DeclareLaunchArgument("route_horizon_m", default_value="80.0"),
+        DeclareLaunchArgument("route_step_m", default_value="2.0"),
 
         LogInfo(msg="Starting Phase 2 minimal drive stack"),
 
@@ -139,6 +190,18 @@ def generate_launch_description():
                     parameters=[{
                         "rate_hz": 20.0,
                         "target_speed_mps": ParameterValue(target_speed_mps, value_type=float),
+                        "cruise_speed_mps": ParameterValue(cruise_speed_mps, value_type=float),
+                        "max_speed_mps": ParameterValue(max_speed_mps, value_type=float),
+                        "min_turn_speed_mps": ParameterValue(min_turn_speed_mps, value_type=float),
+                        "sharp_turn_yaw_deg": ParameterValue(sharp_turn_yaw_deg, value_type=float),
+                        "moderate_turn_yaw_deg": ParameterValue(moderate_turn_yaw_deg, value_type=float),
+                        "speed_slew_up_mps_per_s": ParameterValue(speed_slew_up_mps_per_s, value_type=float),
+                        "speed_slew_down_mps_per_s": ParameterValue(speed_slew_down_mps_per_s, value_type=float),
+                        "dynamic_lookahead_enabled": ParameterValue(dynamic_lookahead_enabled, value_type=bool),
+                        "base_lookahead_m": ParameterValue(base_lookahead_m, value_type=float),
+                        "lookahead_gain": ParameterValue(lookahead_gain, value_type=float),
+                        "min_lookahead_m": ParameterValue(min_lookahead_m, value_type=float),
+                        "max_lookahead_m": ParameterValue(max_lookahead_m, value_type=float),
                     }],
                 ),
             ],
@@ -156,6 +219,11 @@ def generate_launch_description():
                     parameters=[{
                         "max_throttle": ParameterValue(max_throttle, value_type=float),
                         "max_brake": ParameterValue(max_brake, value_type=float),
+                        "throttle_floor_when_moving": ParameterValue(throttle_floor_when_moving, value_type=float),
+                        "uphill_speed_error_boost": ParameterValue(uphill_speed_error_boost, value_type=float),
+                        "min_speed_for_throttle_floor_mps": ParameterValue(min_speed_for_throttle_floor_mps, value_type=float),
+                        "throttle_slew_limit": ParameterValue(throttle_slew_limit, value_type=float),
+                        "integral_limit": ParameterValue(integral_limit, value_type=float),
                     }],
                 ),
                 Node(

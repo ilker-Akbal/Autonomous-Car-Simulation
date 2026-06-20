@@ -20,6 +20,11 @@ class ControlNode(Node):
         self.declare_parameter("max_throttle", 0.45)
         self.declare_parameter("max_brake", 0.75)
         self.declare_parameter("steer_rate_limit", 0.08)
+        self.declare_parameter("throttle_floor_when_moving", 0.12)
+        self.declare_parameter("uphill_speed_error_boost", 0.10)
+        self.declare_parameter("min_speed_for_throttle_floor_mps", 0.5)
+        self.declare_parameter("throttle_slew_limit", 0.04)
+        self.declare_parameter("integral_limit", 3.0)
         self.declare_parameter("command_timeout_s", 0.5)
         self.declare_parameter("rate_hz", 20.0)
 
@@ -29,6 +34,11 @@ class ControlNode(Node):
         self.max_throttle = float(self.get_parameter("max_throttle").value)
         self.max_brake = float(self.get_parameter("max_brake").value)
         self.steer_rate_limit = float(self.get_parameter("steer_rate_limit").value)
+        self.throttle_floor_when_moving = float(self.get_parameter("throttle_floor_when_moving").value)
+        self.uphill_speed_error_boost = float(self.get_parameter("uphill_speed_error_boost").value)
+        self.min_speed_for_throttle_floor_mps = float(self.get_parameter("min_speed_for_throttle_floor_mps").value)
+        self.throttle_slew_limit = float(self.get_parameter("throttle_slew_limit").value)
+        self.integral_limit = float(self.get_parameter("integral_limit").value)
         self.command_timeout_s = float(self.get_parameter("command_timeout_s").value)
         self.rate_hz = float(self.get_parameter("rate_hz").value)
 
@@ -38,6 +48,7 @@ class ControlNode(Node):
         self.last_status_time = 0.0
 
         self.integral = 0.0
+        self.last_throttle = 0.0
         self.last_steer = 0.0
 
         self.create_subscription(String, "/adas/planning/lane_plan", self._plan_cb, 10)
@@ -80,34 +91,70 @@ class ControlNode(Node):
         now = time.time()
         plan_ok = (self.last_plan is not None) and (now - self.last_plan_time) < 1.0
         status_ok = (self.last_status is not None) and (now - self.last_status_time) < 1.0
-
-        if not plan_ok or not status_ok:
-            # publish emergency brake
-            cmd = {"stamp": now, "source": "phase2_control", "target_speed_mps": 0.0, "current_speed_mps": self._get_current_speed(), "throttle": 0.0, "brake": 1.0, "steer": 0.0, "reverse": False, "hand_brake": False}
-            m = String(); m.data = json.dumps(cmd); self.cmd_pub.publish(m)
-            dbg = String(); dbg.data = json.dumps({"status_ok": status_ok, "plan_ok": plan_ok}); self.debug_pub.publish(dbg)
-            return
-
-        target_speed = float(self.last_plan.get("target_speed_mps", 0.0))
-        target_steer = float(self.last_plan.get("steer", 0.0))
+        timeout_stop = not plan_ok or not status_ok
 
         current_speed = self._get_current_speed()
+        target_speed = 0.0
+        target_steer = 0.0
+        raw_throttle = 0.0
 
-        error = target_speed - current_speed
-        self.integral += error * (1.0 / max(1.0, self.rate_hz))
+        if plan_ok:
+            target_speed = float(self.last_plan.get("target_speed_mps", 0.0))
+            target_steer = float(self.last_plan.get("steer", 0.0))
 
-        throttle = _clamp(self.kp * error + self.ki * self.integral, 0.0, self.max_throttle)
-        brake = 0.0
-        if error < 0:
-            brake = _clamp(-self.brake_kp * error, 0.0, self.max_brake)
+        if timeout_stop:
+            self.integral = 0.0
+            throttle = 0.0
+            brake = 1.0
+            steer = 0.0
+        else:
+            error = target_speed - current_speed
+            dt = 1.0 / max(1.0, self.rate_hz)
+            if target_speed <= 0.05 or error < 0:
+                self.integral += error * dt * 0.5
+            else:
+                self.integral += error * dt
 
-        # steering rate limit
-        max_delta = self.steer_rate_limit
-        steer = _clamp(target_steer, -1.0, 1.0)
-        delta = steer - self.last_steer
-        if abs(delta) > max_delta:
-            steer = self.last_steer + (max_delta if delta > 0 else -max_delta)
-        self.last_steer = steer
+            self.integral = _clamp(self.integral, -self.integral_limit, self.integral_limit)
+
+            raw_throttle = self.kp * error + self.ki * self.integral
+
+            if current_speed > self.min_speed_for_throttle_floor_mps and target_speed > 0.2:
+                raw_throttle = max(raw_throttle, self.throttle_floor_when_moving)
+
+            if error > 0.5:
+                raw_throttle += self.uphill_speed_error_boost * min(error, 1.0)
+
+            throttle = _clamp(raw_throttle, 0.0, self.max_throttle)
+            brake = 0.0
+
+            if error < -0.05:
+                brake = _clamp(-self.brake_kp * error, 0.0, self.max_brake)
+                throttle = 0.0
+
+            if target_speed <= 0.05 and current_speed > 0.1:
+                brake = self.max_brake
+                throttle = 0.0
+
+            delta = throttle - self.last_throttle
+            delta = _clamp(delta, -self.throttle_slew_limit, self.throttle_slew_limit)
+            throttle = _clamp(self.last_throttle + delta, 0.0, 1.0)
+
+            if brake > 0.05:
+                throttle = 0.0
+            elif throttle > 0.05:
+                brake = 0.0
+
+            if brake > 0.05 or target_speed <= 0.05:
+                self.integral = 0.0
+
+            steer = _clamp(target_steer, -1.0, 1.0)
+            steer_delta = steer - self.last_steer
+            steer = self.last_steer + _clamp(steer_delta, -self.steer_rate_limit, self.steer_rate_limit)
+            steer = _clamp(steer, -1.0, 1.0)
+            self.last_steer = steer
+
+        self.last_throttle = throttle
 
         cmd = {
             "stamp": now,
@@ -116,13 +163,28 @@ class ControlNode(Node):
             "current_speed_mps": current_speed,
             "throttle": round(float(throttle), 3),
             "brake": round(float(brake), 3),
-            "steer": round(float(steer), 3),
+            "steer": round(float(self.last_steer), 3),
             "reverse": False,
             "hand_brake": False,
         }
 
-        m = String(); m.data = json.dumps(cmd); self.cmd_pub.publish(m)
-        dbg = String(); dbg.data = json.dumps({"error": error, "throttle": throttle, "brake": brake, "steer": steer}); self.debug_pub.publish(dbg)
+        m = String()
+        m.data = json.dumps(cmd)
+        self.cmd_pub.publish(m)
+
+        dbg = String()
+        dbg.data = json.dumps({
+            "target_speed_mps": target_speed,
+            "current_speed_mps": current_speed,
+            "speed_error": round(target_speed - current_speed, 3),
+            "integral": round(self.integral, 3),
+            "raw_throttle": round(raw_throttle if not timeout_stop else 0.0, 3),
+            "throttle": round(float(throttle), 3),
+            "brake": round(float(brake), 3),
+            "steer": round(float(self.last_steer), 3),
+            "timeout_stop": timeout_stop,
+        })
+        self.debug_pub.publish(dbg)
 
 
 def main(args=None):
