@@ -99,10 +99,12 @@ class LaneFollower(Node):
         status_ok = (now - self.last_status_time) < 1.0
         route_ok = (self.route is not None) and (now - self.last_route_time) < 2.0
 
+        route_source = self.route.get("route_source", "unknown") if self.route else "unknown"
         if not status_ok or not route_ok:
             plan = {
                 "stamp": now,
                 "source": "phase2b_pure_pursuit",
+                "route_source": route_source,
                 "cruise_speed_mps": self.cruise_speed_mps,
                 "target_speed_mps": 0.0,
                 "turn_intensity": 0.0,
@@ -133,6 +135,7 @@ class LaneFollower(Node):
             plan = {
                 "stamp": now,
                 "source": "phase2b_pure_pursuit",
+                "route_source": route_source,
                 "cruise_speed_mps": self.cruise_speed_mps,
                 "target_speed_mps": 0.0,
                 "turn_intensity": 0.0,
@@ -222,6 +225,7 @@ class LaneFollower(Node):
         plan = {
             "stamp": now,
             "source": "phase2b_pure_pursuit",
+            "route_source": route_source,
             "cruise_speed_mps": self.cruise_speed_mps,
             "target_speed_mps": round(self.last_target_speed, 3),
             "turn_intensity": round(float(profile["turn_intensity"]), 3),

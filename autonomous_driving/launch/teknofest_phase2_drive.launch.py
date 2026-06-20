@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction, LogInfo
 from launch.substitutions import LaunchConfiguration
@@ -7,6 +10,10 @@ from launch.conditions import IfCondition
 
 
 def generate_launch_description():
+    package_root = Path(__file__).resolve().parent.parent
+    default_mission_geojson = package_root / "missions" / "teknofest_town03_competition_v4_tasks_only.geojson"
+    if not default_mission_geojson.exists():
+        default_mission_geojson = package_root / "missions" / "teknofest_round3.geojson"
     # Phase 1 sensor args (lite defaults)
     zed_enabled = LaunchConfiguration("zed_enabled")
     depth_enabled = LaunchConfiguration("depth_enabled")
@@ -43,6 +50,17 @@ def generate_launch_description():
     integral_limit = LaunchConfiguration("integral_limit")
     route_horizon_m = LaunchConfiguration("route_horizon_m")
     route_step_m = LaunchConfiguration("route_step_m")
+    local_route_horizon_m = LaunchConfiguration("local_route_horizon_m")
+    global_sampling_resolution_m = LaunchConfiguration("global_sampling_resolution_m")
+    replan_distance_threshold_m = LaunchConfiguration("replan_distance_threshold_m")
+    route_source_mode = LaunchConfiguration("route_source_mode")
+    fallback_to_simple_forward_route = LaunchConfiguration("fallback_to_simple_forward_route")
+    hold_last_route_s = LaunchConfiguration("hold_last_route_s")
+    mission_geojson = LaunchConfiguration("mission_geojson")
+    target_reached_distance_m = LaunchConfiguration("target_reached_distance_m")
+    loop_mission = LaunchConfiguration("loop_mission")
+    mission_publish_rate_hz = LaunchConfiguration("mission_publish_rate_hz")
+    min_route_points = LaunchConfiguration("min_route_points")
     enable_phase2_drive = LaunchConfiguration("enable_phase2_drive")
     max_throttle = LaunchConfiguration("max_throttle")
     max_brake = LaunchConfiguration("max_brake")
@@ -104,6 +122,17 @@ def generate_launch_description():
         DeclareLaunchArgument("ego_role_name", default_value="ego_vehicle"),
         DeclareLaunchArgument("route_horizon_m", default_value="80.0"),
         DeclareLaunchArgument("route_step_m", default_value="2.0"),
+        DeclareLaunchArgument("local_route_horizon_m", default_value="80.0"),
+        DeclareLaunchArgument("global_sampling_resolution_m", default_value="2.0"),
+        DeclareLaunchArgument("replan_distance_threshold_m", default_value="8.0"),
+        DeclareLaunchArgument("route_source_mode", default_value="global"),
+        DeclareLaunchArgument("fallback_to_simple_forward_route", default_value="true"),
+        DeclareLaunchArgument("hold_last_route_s", default_value="2.0"),
+        DeclareLaunchArgument("mission_geojson", default_value=str(default_mission_geojson)),
+        DeclareLaunchArgument("target_reached_distance_m", default_value="4.0"),
+        DeclareLaunchArgument("loop_mission", default_value="false"),
+        DeclareLaunchArgument("mission_publish_rate_hz", default_value="2.0"),
+        DeclareLaunchArgument("min_route_points", default_value="8"),
 
         LogInfo(msg="Starting Phase 2 minimal drive stack"),
 
@@ -165,14 +194,16 @@ def generate_launch_description():
             actions=[
                 Node(
                     package="autonomous_driving",
-                    executable="simple_route_planner_node",
-                    name="simple_route_planner",
+                    executable="mission_route_manager_node",
+                    name="mission_route_manager",
                     output="screen",
                     condition=IfCondition(enable_phase2_drive),
                     parameters=[{
-                        "horizon_m": ParameterValue(route_horizon_m, value_type=float),
-                        "step_m": ParameterValue(route_step_m, value_type=float),
-                        "rate_hz": 5.0,
+                        "mission_geojson": ParameterValue(mission_geojson, value_type=str),
+                        "target_reached_distance_m": ParameterValue(target_reached_distance_m, value_type=float),
+                        "publish_rate_hz": ParameterValue(mission_publish_rate_hz, value_type=float),
+                        "loop_mission": ParameterValue(loop_mission, value_type=bool),
+                        "competition_mode": True,
                     }],
                 ),
             ],
@@ -180,6 +211,55 @@ def generate_launch_description():
 
         TimerAction(
             period=9.0,
+            actions=[
+                Node(
+                    package="autonomous_driving",
+                    executable="global_route_planner_node",
+                    name="global_route_planner",
+                    output="screen",
+                    condition=IfCondition(enable_phase2_drive),
+                    parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
+                        "host": ParameterValue(host, value_type=str),
+                        "port": ParameterValue(port, value_type=int),
+                        "ego_role_name": ParameterValue(ego_role_name, value_type=str),
+                        "global_sampling_resolution_m": ParameterValue(global_sampling_resolution_m, value_type=float),
+                        "replan_distance_threshold_m": ParameterValue(replan_distance_threshold_m, value_type=float),
+                        "goal_change_replan": True,
+                        "route_timeout_s": 10.0,
+                        "min_route_points": ParameterValue(min_route_points, value_type=int),
+                    }],
+                ),
+            ],
+        ),
+
+        TimerAction(
+            period=10.0,
+            actions=[
+                Node(
+                    package="autonomous_driving",
+                    executable="route_sampler_node",
+                    name="route_sampler",
+                    output="screen",
+                    condition=IfCondition(enable_phase2_drive),
+                    parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
+                        "host": ParameterValue(host, value_type=str),
+                        "port": ParameterValue(port, value_type=int),
+                        "ego_role_name": ParameterValue(ego_role_name, value_type=str),
+                        "route_source_mode": ParameterValue(route_source_mode, value_type=str),
+                        "fallback_to_simple_forward_route": ParameterValue(fallback_to_simple_forward_route, value_type=bool),
+                        "hold_last_route_s": ParameterValue(hold_last_route_s, value_type=float),
+                        "local_route_horizon_m": ParameterValue(local_route_horizon_m, value_type=float),
+                        "min_route_points": ParameterValue(min_route_points, value_type=int),
+                        "rate_hz": 5.0,
+                    }],
+                ),
+            ],
+        ),
+
+        TimerAction(
+            period=11.0,
             actions=[
                 Node(
                     package="autonomous_driving",
