@@ -143,7 +143,7 @@ def generate_launch_description():
                         "route_topic": "/adas/planning/route",
                         "mission_topic": "/adas/teknofest/mission",
                         "status_topic": "/adas/carla/status",
-                        "lane_plan_topic": "/adas/planning/lane_plan",
+                        "lane_plan_topic": "/adas/planning/lane_plan_raw",
                         "carla_root": carla_root,
                         "host": host,
                         "port": port,
@@ -191,6 +191,51 @@ def generate_launch_description():
 
         TimerAction(
             period=7.3,
+            actions=[
+                Node(
+                    package="autonomous_driving",
+                    executable="traffic_light_manager_node",
+                    name="traffic_light_manager_node",
+                    output="screen",
+                    parameters=[{
+                        "traffic_light_topic": "/adas/perception/traffic_lights",
+                        "route_topic": "/adas/planning/route",
+                        "status_topic": "/adas/carla/status",
+                        "tl_event_topic": "/adas/planning/tl_event",
+                        "carla_root": carla_root,
+                        "host": host,
+                        "port": port,
+                        "log_root": log_root,
+                        "log_session_id": log_session_id,
+                    }],
+                ),
+            ],
+        ),
+
+        TimerAction(
+            period=7.35,
+            actions=[
+                Node(
+                    package="autonomous_driving",
+                    executable="behavior_supervisor_node",
+                    name="behavior_supervisor_node",
+                    output="screen",
+                    parameters=[{
+                        "lane_plan_raw_topic": "/adas/planning/lane_plan_raw",
+                        "lane_plan_topic": "/adas/planning/lane_plan",
+                        "route_topic": "/adas/planning/route",
+                        "status_topic": "/adas/carla/status",
+                        "mission_topic": "/adas/teknofest/mission",
+                        "tl_event_topic": "/adas/planning/tl_event",
+                        "log_root": log_root,
+                        "log_session_id": log_session_id,
+                    }],
+                ),
+            ],
+        ),
+
+        TimerAction(
+            period=7.4,
             actions=[
                 Node(
                     package="autonomous_driving",
