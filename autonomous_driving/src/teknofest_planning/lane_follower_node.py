@@ -30,7 +30,7 @@ class LaneFollowerNode(Node):
         self.declare_parameter("route_topic", "/adas/planning/route")
         self.declare_parameter("mission_topic", "/adas/teknofest/mission")
         self.declare_parameter("status_topic", "/adas/carla/status")
-        self.declare_parameter("lane_plan_topic", "/adas/planning/lane_plan")
+        self.declare_parameter("lane_plan_topic", "/adas/planning/lane_plan_raw")
         self.declare_parameter("carla_root", "/home/ilker/simulators/CARLA_0.9.15")
         self.declare_parameter("host", "127.0.0.1")
         self.declare_parameter("port", 2000)
@@ -696,10 +696,6 @@ class LaneFollowerNode(Node):
             self.publish_stop_plan("missing_status")
             return
 
-        if self.mission_payload is None or now - self.last_mission_time_s > self.mission_timeout_s:
-            self.publish_stop_plan("missing_mission", ego)
-            return
-
         route_points = self.route_points()
         if not route_points or now - self.last_route_time_s > self.route_timeout_s:
             self.publish_stop_plan("missing_route", ego)
@@ -710,7 +706,7 @@ class LaneFollowerNode(Node):
             ego=ego,
             config=self.config,
             last_nearest_index=self.last_nearest_index,
-            mission_must_stop=self.mission_must_stop(),
+            mission_must_stop=False,
             distance_to_goal_m=self.distance_to_goal_m(),
         )
         self.last_nearest_index = plan.nearest_index
@@ -1060,6 +1056,7 @@ class LaneFollowerNode(Node):
             "route_age_ms": route_age_ms,
             "mission_status_age_ms": mission_status_age_ms,
             "ego_status_age_ms": ego_status_age_ms,
+            "raw_plan": True,
             "timeout_source": "",
             "timeout_threshold_ms": {
                 "route": int(self.route_timeout_s * 1000.0),
@@ -1073,6 +1070,8 @@ class LaneFollowerNode(Node):
             "lane_change_ahead": bool(plan.lane_change_ahead),
             "lane_change_reason": plan.lane_change_reason,
             "active_mission_target": self.active_mission_target_name(),
+            "mission_stage": (self.mission_payload or {}).get("stage"),
+            "mission_distance_to_goal_m": self.distance_to_goal_m(),
             "mission_state": (self.mission_payload or {}).get("stage"),
             "current_speed_mps": round(float(ego.speed_mps), 3),
             "ego_x": round(float(ego.x), 4),
@@ -1123,6 +1122,7 @@ class LaneFollowerNode(Node):
             "route_age_ms": route_age_ms,
             "mission_status_age_ms": mission_status_age_ms,
             "ego_status_age_ms": ego_status_age_ms,
+            "raw_plan": True,
             "timeout_source": reason,
             "timeout_threshold_ms": {
                 "route": int(self.route_timeout_s * 1000.0),
@@ -1132,6 +1132,8 @@ class LaneFollowerNode(Node):
             "lateral_error_m": None,
             "heading_error_deg": None,
             "active_mission_target": self.active_mission_target_name(),
+            "mission_stage": (self.mission_payload or {}).get("stage"),
+            "mission_distance_to_goal_m": self.distance_to_goal_m(),
             "mission_state": (self.mission_payload or {}).get("stage"),
             "current_speed_mps": round(float(ego.speed_mps), 3) if ego else None,
             "ego_x": round(float(ego.x), 4) if ego else None,
