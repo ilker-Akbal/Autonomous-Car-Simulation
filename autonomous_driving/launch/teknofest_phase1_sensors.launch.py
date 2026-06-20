@@ -7,20 +7,6 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    # LaunchConfiguration handles for Phase 1 sensor profile
-    zed_enabled = LaunchConfiguration("zed_enabled")
-    depth_enabled = LaunchConfiguration("depth_enabled")
-    lidar_enabled = LaunchConfiguration("lidar_enabled")
-    zed_point_cloud_enabled = LaunchConfiguration("zed_point_cloud_enabled")
-    front_rgb_separate_enabled = LaunchConfiguration("front_rgb_separate_enabled")
-    front_rgb_from_zed_left = LaunchConfiguration("front_rgb_from_zed_left")
-    camera_width = LaunchConfiguration("camera_width")
-    camera_height = LaunchConfiguration("camera_height")
-    camera_sensor_tick = LaunchConfiguration("camera_sensor_tick")
-    lidar_points_per_second = LaunchConfiguration("lidar_points_per_second")
-    lidar_sensor_tick = LaunchConfiguration("lidar_sensor_tick")
-    lidar_channels = LaunchConfiguration("lidar_channels")
-
     carla_root = LaunchConfiguration("carla_root")
     host = LaunchConfiguration("host")
     port = LaunchConfiguration("port")
@@ -37,6 +23,7 @@ def generate_launch_description():
     camera_height_m = LaunchConfiguration("camera_height_m")
     camera_pitch_deg = LaunchConfiguration("camera_pitch_deg")
     camera_width = LaunchConfiguration("camera_width")
+    camera_height = LaunchConfiguration("camera_height")
     camera_sensor_tick = LaunchConfiguration("camera_sensor_tick")
     front_rgb_separate_enabled = LaunchConfiguration("front_rgb_separate_enabled")
     front_rgb_from_zed_left = LaunchConfiguration("front_rgb_from_zed_left")
@@ -47,6 +34,10 @@ def generate_launch_description():
     lidar_points_per_second = LaunchConfiguration("lidar_points_per_second")
     lidar_sensor_tick = LaunchConfiguration("lidar_sensor_tick")
     lidar_channels = LaunchConfiguration("lidar_channels")
+    enable_sync_mode = LaunchConfiguration("enable_sync_mode")
+    auto_tick_sync_world = LaunchConfiguration("auto_tick_sync_world")
+    fixed_delta_seconds = LaunchConfiguration("fixed_delta_seconds")
+    tick_rate_hz = LaunchConfiguration("tick_rate_hz")
 
     return LaunchDescription([
         DeclareLaunchArgument("carla_root", default_value="/home/ilker/simulators/CARLA_0.9.15"),
@@ -59,6 +50,10 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_lane_detector", default_value="true"),
         DeclareLaunchArgument("enable_ekf_localizer", default_value="true"),
         DeclareLaunchArgument("enable_diagnostics", default_value="true"),
+        DeclareLaunchArgument("enable_sync_mode", default_value="true"),
+        DeclareLaunchArgument("auto_tick_sync_world", default_value="true"),
+        DeclareLaunchArgument("fixed_delta_seconds", default_value="0.05"),
+        DeclareLaunchArgument("tick_rate_hz", default_value="20.0"),
         DeclareLaunchArgument("zed_enabled", default_value="false"),
         DeclareLaunchArgument("depth_enabled", default_value="false"),
         DeclareLaunchArgument("lidar_enabled", default_value="false"),
@@ -93,6 +88,10 @@ def generate_launch_description():
                 "timeout": 120.0,
                 "ego_role_name": ego_role_name,
                 "status_period_s": 0.1,
+                "enable_sync_mode": ParameterValue(enable_sync_mode, value_type=bool),
+                "auto_tick_sync_world": ParameterValue(auto_tick_sync_world, value_type=bool),
+                "fixed_delta_seconds": ParameterValue(fixed_delta_seconds, value_type=float),
+                "tick_rate_hz": ParameterValue(tick_rate_hz, value_type=float),
             }],
         ),
 

@@ -48,6 +48,8 @@ class CarlaWorldManagerNode(Node):
         self.declare_parameter("set_spectator", True)
         self.declare_parameter("enable_sync_mode", False)
         self.declare_parameter("fixed_delta_seconds", 0.05)
+        self.declare_parameter("auto_tick_sync_world", False)
+        self.declare_parameter("tick_rate_hz", 20.0)
         self.declare_parameter("status_period_s", 0.1)
 
         self.carla_root = self.get_parameter("carla_root").value
@@ -62,6 +64,8 @@ class CarlaWorldManagerNode(Node):
         self.set_spectator = bool(self.get_parameter("set_spectator").value)
         self.enable_sync_mode = bool(self.get_parameter("enable_sync_mode").value)
         self.fixed_delta_seconds = float(self.get_parameter("fixed_delta_seconds").value)
+        self.auto_tick_sync_world = bool(self.get_parameter("auto_tick_sync_world").value)
+        self.tick_rate_hz = float(self.get_parameter("tick_rate_hz").value)
         self.status_period_s = float(self.get_parameter("status_period_s").value)
 
         self.carla = load_carla(self.carla_root)
@@ -87,20 +91,53 @@ class CarlaWorldManagerNode(Node):
         self.status_pub = self.create_publisher(String, "/adas/carla/status", 10)
         self.timer = self.create_timer(self.status_period_s, self.publish_status)
 
+        # Tick-sync helpers
+        self.tick_timer = None
+        self._last_tick_warn_time = 0.0
+
         self.get_logger().info("CARLA world manager hazır")
         self.get_logger().info(f"map={self.world.get_map().name}")
         self.get_logger().info(f"ego_id={self.ego_vehicle.id}")
+        self.get_logger().info(
+            f"sync_mode={self.enable_sync_mode}, auto_tick_sync_world={self.auto_tick_sync_world}, "
+            f"fixed_delta_seconds={self.fixed_delta_seconds}, tick_rate_hz={self.tick_rate_hz}"
+        )
+
+        # If enabled, start ROS timer to tick the CARLA world at fixed rate
+        if self.enable_sync_mode and self.auto_tick_sync_world:
+            try:
+                interval = max(0.001, 1.0 / float(self.tick_rate_hz))
+                self.tick_timer = self.create_timer(interval, self.tick_world)
+                self.get_logger().info(f"Auto tick sync world enabled: {self.tick_rate_hz} Hz")
+            except Exception as exc:
+                self.get_logger().warn(f"Failed to start auto tick timer: {exc}")
 
     def configure_world(self):
         settings = self.world.get_settings()
-        settings.synchronous_mode = self.enable_sync_mode
+        # Apply synchronous mode and fixed delta when requested
+        try:
+            settings.synchronous_mode = bool(self.enable_sync_mode)
 
-        if self.enable_sync_mode:
-            settings.fixed_delta_seconds = self.fixed_delta_seconds
-        else:
-            settings.fixed_delta_seconds = None
+            if self.enable_sync_mode:
+                settings.fixed_delta_seconds = float(self.fixed_delta_seconds)
+            else:
+                settings.fixed_delta_seconds = None
 
-        self.world.apply_settings(settings)
+            self.world.apply_settings(settings)
+        except Exception as exc:
+            self.get_logger().warn(f"Failed to apply world settings: {exc}")
+
+
+    def tick_world(self):
+        try:
+            # Tick the CARLA world once (used when synchronous mode + auto tick enabled)
+            self.world.tick()
+        except Exception as exc:
+            # Throttle warning messages
+            now = time.time()
+            if now - self._last_tick_warn_time > 5.0:
+                self.get_logger().warn(f"CARLA world.tick() failed: {exc}")
+                self._last_tick_warn_time = now
 
     def find_ego_vehicle(self):
         vehicles = self.world.get_actors().filter("vehicle.*")
@@ -182,12 +219,31 @@ class CarlaWorldManagerNode(Node):
         self.status_pub.publish(msg)
 
     def destroy_node(self):
-        if self.destroy_on_shutdown and hasattr(self, "ego_vehicle"):
+        # Attempt to restore CARLA settings and stop ticking
+        try:
             try:
-                self.ego_vehicle.destroy()
+                settings = self.world.get_settings()
+                settings.synchronous_mode = False
+                settings.fixed_delta_seconds = None
+                self.world.apply_settings(settings)
             except Exception:
+                # best-effort restore; ignore failures
                 pass
-        super().destroy_node()
+
+            # cancel tick timer if running
+            if hasattr(self, "tick_timer") and self.tick_timer is not None:
+                try:
+                    self.tick_timer.cancel()
+                except Exception:
+                    pass
+
+            if self.destroy_on_shutdown and hasattr(self, "ego_vehicle"):
+                try:
+                    self.ego_vehicle.destroy()
+                except Exception:
+                    pass
+        finally:
+            super().destroy_node()
 
 
 
