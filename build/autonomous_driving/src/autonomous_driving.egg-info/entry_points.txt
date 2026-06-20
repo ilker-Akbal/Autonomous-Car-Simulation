@@ -1,19 +1,7 @@
 [console_scripts]
-behavior_supervisor_node = teknofest_planning.behavior_supervisor_node:main
-carla_control_adapter_node = teknofest_control.carla_control_adapter_node:main
 carla_sensor_bridge_node = ros2_nodes.carla_sensor_bridge_node:main
 carla_spectator_follow_node = teknofest_sim.carla_spectator_follow_node:main
-carla_viewport_overlay_node = teknofest_perception.carla_viewport_overlay_node:main
 carla_world_manager_node = ros2_nodes.carla_world_manager_node:main
-control_node = teknofest_control.control_node:main
-lane_follower_node = teknofest_planning.lane_follower_node:main
-perception_advisory_visualizer_node = teknofest_perception.perception_advisory_visualizer_node:main
-route_planner_node = teknofest_planning.route_planner_node:main
-teknofest_mission_node = teknofest_sim.teknofest_mission_node:main
 teknofest_spectator_follow_node = teknofest_sim.teknofest_spectator_follow_node:main
-traffic_light_detector_node = teknofest_perception.traffic_light_detector_node:main
-traffic_light_manager_node = teknofest_planning.traffic_light_manager_node:main
-traffic_light_stopline_detector_node = teknofest_perception.traffic_light_stopline_detector_node:main
-traffic_sign_detector_node = teknofest_perception.traffic_sign_detector_node:main
 viewport_camera_follow_node = teknofest_sim.viewport_camera_follow_node:main
 

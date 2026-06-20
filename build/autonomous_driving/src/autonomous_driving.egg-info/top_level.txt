@@ -1,8 +1,3 @@
 ros2_nodes
 teknofest_common
-teknofest_control
-teknofest_debug
-teknofest_perception
-teknofest_planning
-teknofest_safety
 teknofest_sim

@@ -1,7 +1,7 @@
 Metadata-Version: 2.1
 Name: autonomous-driving
 Version: 0.0.0
-Summary: Minimal CARLA ROS2 skeleton for TEKNOFEST simulation.
+Summary: Minimal CARLA ROS2 sensor skeleton for TEKNOFEST simulation.
 Home-page: UNKNOWN
 Maintainer: ilker
 Maintainer-email: ilker@example.com
