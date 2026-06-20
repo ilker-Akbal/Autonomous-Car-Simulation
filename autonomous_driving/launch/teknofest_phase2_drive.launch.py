@@ -63,6 +63,36 @@ def generate_launch_description():
     vehicle_stop_distance_m = LaunchConfiguration("vehicle_stop_distance_m")
     pedestrian_stop_distance_m = LaunchConfiguration("pedestrian_stop_distance_m")
     follow_time_gap_s = LaunchConfiguration("follow_time_gap_s")
+    enable_traffic_light_events = LaunchConfiguration("enable_traffic_light_events")
+    traffic_light_horizon_m = LaunchConfiguration("traffic_light_horizon_m")
+    traffic_light_lateral_margin_m = LaunchConfiguration("traffic_light_lateral_margin_m")
+    red_detection_horizon_m = LaunchConfiguration("red_detection_horizon_m")
+    red_approach_distance_m = LaunchConfiguration("red_approach_distance_m")
+    red_stop_distance_m = LaunchConfiguration("red_stop_distance_m")
+    red_creep_distance_m = LaunchConfiguration("red_creep_distance_m")
+    red_approach_speed_mps = LaunchConfiguration("red_approach_speed_mps")
+    red_creep_speed_mps = LaunchConfiguration("red_creep_speed_mps")
+    yellow_slow_distance_m = LaunchConfiguration("yellow_slow_distance_m")
+    yellow_stop_distance_m = LaunchConfiguration("yellow_stop_distance_m")
+    yellow_slow_speed_mps = LaunchConfiguration("yellow_slow_speed_mps")
+    traffic_light_stop_buffer_m = LaunchConfiguration("traffic_light_stop_buffer_m")
+    green_release_distance_m = LaunchConfiguration("green_release_distance_m")
+    green_ignore_after_pass_m = LaunchConfiguration("green_ignore_after_pass_m")
+    tl_hold_state_memory_s = LaunchConfiguration("tl_hold_state_memory_s")
+    tl_lost_grace_s = LaunchConfiguration("tl_lost_grace_s")
+    green_release_grace_s = LaunchConfiguration("green_release_grace_s")
+    stopped_speed_threshold_mps = LaunchConfiguration("stopped_speed_threshold_mps")
+    stopline_reached_distance_m = LaunchConfiguration("stopline_reached_distance_m")
+    tl_stop_line_buffer_m = LaunchConfiguration("tl_stop_line_buffer_m")
+    tl_decel_max_mps2 = LaunchConfiguration("tl_decel_max_mps2")
+    tl_slow_speed_mps = LaunchConfiguration("tl_slow_speed_mps")
+    tl_min_profile_speed_mps = LaunchConfiguration("tl_min_profile_speed_mps")
+    tl_hard_stop_distance_m = LaunchConfiguration("tl_hard_stop_distance_m")
+    tl_profile_horizon_m = LaunchConfiguration("tl_profile_horizon_m")
+    tl_fence_width_m = LaunchConfiguration("tl_fence_width_m")
+    yellow_pass_time_s = LaunchConfiguration("yellow_pass_time_s")
+    stopped_vehicle_speed_mps = LaunchConfiguration("stopped_vehicle_speed_mps")
+    stopped_vehicle_stop_distance_m = LaunchConfiguration("stopped_vehicle_stop_distance_m")
     mission_geojson = LaunchConfiguration("mission_geojson")
     target_reached_distance_m = LaunchConfiguration("target_reached_distance_m")
     loop_mission = LaunchConfiguration("loop_mission")
@@ -122,7 +152,10 @@ def generate_launch_description():
         DeclareLaunchArgument("max_throttle", default_value="0.45"),
         DeclareLaunchArgument("max_brake", default_value="0.75"),
 
-        DeclareLaunchArgument("carla_root", default_value="/home/ilker/simulators/CARLA_0.9.15"),
+        DeclareLaunchArgument(
+            "carla_root",
+            default_value="/home/ilker/simulators/CARLA_0.9.15",
+        ),
         DeclareLaunchArgument("host", default_value="127.0.0.1"),
         DeclareLaunchArgument("port", default_value="2000"),
         DeclareLaunchArgument("town", default_value="Town03"),
@@ -142,6 +175,36 @@ def generate_launch_description():
         DeclareLaunchArgument("vehicle_stop_distance_m", default_value="6.0"),
         DeclareLaunchArgument("pedestrian_stop_distance_m", default_value="8.0"),
         DeclareLaunchArgument("follow_time_gap_s", default_value="1.5"),
+        DeclareLaunchArgument("enable_traffic_light_events", default_value="true"),
+        DeclareLaunchArgument("traffic_light_horizon_m", default_value="60.0"),
+        DeclareLaunchArgument("traffic_light_lateral_margin_m", default_value="4.0"),
+        DeclareLaunchArgument("red_detection_horizon_m", default_value="60.0"),
+        DeclareLaunchArgument("red_approach_distance_m", default_value="45.0"),
+        DeclareLaunchArgument("red_stop_distance_m", default_value="8.0"),
+        DeclareLaunchArgument("red_creep_distance_m", default_value="3.0"),
+        DeclareLaunchArgument("red_approach_speed_mps", default_value="2.0"),
+        DeclareLaunchArgument("red_creep_speed_mps", default_value="0.8"),
+        DeclareLaunchArgument("yellow_slow_distance_m", default_value="30.0"),
+        DeclareLaunchArgument("yellow_stop_distance_m", default_value="8.0"),
+        DeclareLaunchArgument("yellow_slow_speed_mps", default_value="1.5"),
+        DeclareLaunchArgument("traffic_light_stop_buffer_m", default_value="1.0"),
+        DeclareLaunchArgument("green_release_distance_m", default_value="8.0"),
+        DeclareLaunchArgument("green_ignore_after_pass_m", default_value="6.0"),
+        DeclareLaunchArgument("tl_hold_state_memory_s", default_value="2.0"),
+        DeclareLaunchArgument("tl_lost_grace_s", default_value="0.75"),
+        DeclareLaunchArgument("green_release_grace_s", default_value="1.0"),
+        DeclareLaunchArgument("stopped_speed_threshold_mps", default_value="0.25"),
+        DeclareLaunchArgument("stopline_reached_distance_m", default_value="1.5"),
+        DeclareLaunchArgument("tl_stop_line_buffer_m", default_value="1.0"),
+        DeclareLaunchArgument("tl_decel_max_mps2", default_value="1.2"),
+        DeclareLaunchArgument("tl_slow_speed_mps", default_value="0.8"),
+        DeclareLaunchArgument("tl_min_profile_speed_mps", default_value="0.4"),
+        DeclareLaunchArgument("tl_hard_stop_distance_m", default_value="1.2"),
+        DeclareLaunchArgument("tl_profile_horizon_m", default_value="45.0"),
+        DeclareLaunchArgument("tl_fence_width_m", default_value="8.0"),
+        DeclareLaunchArgument("yellow_pass_time_s", default_value="1.0"),
+        DeclareLaunchArgument("stopped_vehicle_speed_mps", default_value="0.4"),
+        DeclareLaunchArgument("stopped_vehicle_stop_distance_m", default_value="12.0"),
         DeclareLaunchArgument("mission_geojson", default_value=str(default_mission_geojson)),
         DeclareLaunchArgument("target_reached_distance_m", default_value="4.0"),
         DeclareLaunchArgument("loop_mission", default_value="false"),
@@ -157,6 +220,11 @@ def generate_launch_description():
             name="carla_world_manager_node",
             output="screen",
             parameters=[{
+                "carla_root": ParameterValue(carla_root, value_type=str),
+                "host": ParameterValue(host, value_type=str),
+                "port": ParameterValue(port, value_type=int),
+                "town": ParameterValue(town, value_type=str),
+                "ego_role_name": ParameterValue(ego_role_name, value_type=str),
                 "timeout": 120.0,
                 "status_period_s": 0.1,
                 "enable_sync_mode": ParameterValue(enable_sync_mode, value_type=bool),
@@ -175,6 +243,9 @@ def generate_launch_description():
                     name="carla_sensor_bridge_node",
                     output="screen",
                     parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
+                        "host": ParameterValue(host, value_type=str),
+                        "port": ParameterValue(port, value_type=int),
                         "camera_width": ParameterValue(camera_width, value_type=int),
                         "camera_height": ParameterValue(camera_height, value_type=int),
                         "camera_sensor_tick": ParameterValue(camera_sensor_tick, value_type=float),
@@ -213,6 +284,7 @@ def generate_launch_description():
                     output="screen",
                     condition=IfCondition(enable_phase2_drive),
                     parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
                         "mission_geojson": ParameterValue(mission_geojson, value_type=str),
                         "target_reached_distance_m": ParameterValue(target_reached_distance_m, value_type=float),
                         "publish_rate_hz": ParameterValue(mission_publish_rate_hz, value_type=float),
@@ -293,6 +365,37 @@ def generate_launch_description():
                         "vehicle_stop_distance_m": ParameterValue(vehicle_stop_distance_m, value_type=float),
                         "pedestrian_stop_distance_m": ParameterValue(pedestrian_stop_distance_m, value_type=float),
                         "follow_time_gap_s": ParameterValue(follow_time_gap_s, value_type=float),
+                        "stopped_vehicle_speed_mps": ParameterValue(stopped_vehicle_speed_mps, value_type=float),
+                        "stopped_vehicle_stop_distance_m": ParameterValue(stopped_vehicle_stop_distance_m, value_type=float),
+                        "enable_traffic_light_events": ParameterValue(enable_traffic_light_events, value_type=bool),
+                        "traffic_light_horizon_m": ParameterValue(traffic_light_horizon_m, value_type=float),
+                        "traffic_light_lateral_margin_m": ParameterValue(traffic_light_lateral_margin_m, value_type=float),
+                        "red_detection_horizon_m": ParameterValue(red_detection_horizon_m, value_type=float),
+                        "red_approach_distance_m": ParameterValue(red_approach_distance_m, value_type=float),
+                        "red_stop_distance_m": ParameterValue(red_stop_distance_m, value_type=float),
+                        "red_creep_distance_m": ParameterValue(red_creep_distance_m, value_type=float),
+                        "red_approach_speed_mps": ParameterValue(red_approach_speed_mps, value_type=float),
+                        "red_creep_speed_mps": ParameterValue(red_creep_speed_mps, value_type=float),
+                        "yellow_slow_distance_m": ParameterValue(yellow_slow_distance_m, value_type=float),
+                        "yellow_stop_distance_m": ParameterValue(yellow_stop_distance_m, value_type=float),
+                        "yellow_slow_speed_mps": ParameterValue(yellow_slow_speed_mps, value_type=float),
+                        "traffic_light_stop_buffer_m": ParameterValue(traffic_light_stop_buffer_m, value_type=float),
+                        "green_release_distance_m": ParameterValue(green_release_distance_m, value_type=float),
+                        "green_ignore_after_pass_m": ParameterValue(green_ignore_after_pass_m, value_type=float),
+                        "tl_hold_state_memory_s": ParameterValue(tl_hold_state_memory_s, value_type=float),
+                        "tl_lost_grace_s": ParameterValue(tl_lost_grace_s, value_type=float),
+                        "green_release_grace_s": ParameterValue(green_release_grace_s, value_type=float),
+                        "stopped_speed_threshold_mps": ParameterValue(stopped_speed_threshold_mps, value_type=float),
+                        "stopline_reached_distance_m": ParameterValue(stopline_reached_distance_m, value_type=float),
+                        "cruise_speed_mps": ParameterValue(cruise_speed_mps, value_type=float),
+                        "tl_stop_line_buffer_m": ParameterValue(tl_stop_line_buffer_m, value_type=float),
+                        "tl_decel_max_mps2": ParameterValue(tl_decel_max_mps2, value_type=float),
+                        "tl_slow_speed_mps": ParameterValue(tl_slow_speed_mps, value_type=float),
+                        "tl_min_profile_speed_mps": ParameterValue(tl_min_profile_speed_mps, value_type=float),
+                        "tl_hard_stop_distance_m": ParameterValue(tl_hard_stop_distance_m, value_type=float),
+                        "tl_profile_horizon_m": ParameterValue(tl_profile_horizon_m, value_type=float),
+                        "tl_fence_width_m": ParameterValue(tl_fence_width_m, value_type=float),
+                        "yellow_pass_time_s": ParameterValue(yellow_pass_time_s, value_type=float),
                         "stale_route_timeout_s": 1.0,
                     }],
                 ),
@@ -353,6 +456,12 @@ def generate_launch_description():
                     name="carla_control_adapter_node",
                     output="screen",
                     condition=IfCondition(enable_phase2_drive),
+                    parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
+                        "host": ParameterValue(host, value_type=str),
+                        "port": ParameterValue(port, value_type=int),
+                        "ego_role_name": ParameterValue(ego_role_name, value_type=str),
+                    }],
                 ),
             ],
         ),

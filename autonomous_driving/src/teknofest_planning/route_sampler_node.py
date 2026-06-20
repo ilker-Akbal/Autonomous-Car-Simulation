@@ -18,7 +18,7 @@ class RouteSampler(Node):
     def __init__(self):
         super().__init__("route_sampler")
 
-        self.declare_parameter("carla_root", "/home/ilker/simulators/CARLA_0.9.15")
+        self.declare_parameter("carla_root", "/mnt/carla/CARLA_0.9.15")
         self.declare_parameter("host", "127.0.0.1")
         self.declare_parameter("port", 2000)
         self.declare_parameter("ego_role_name", "ego_vehicle")

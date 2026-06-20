@@ -122,23 +122,48 @@ class LaneFollower(Node):
 
         event = str(route_event.get("event", "clear"))
         speed_limit = route_event.get("target_speed_limit_mps")
-        if event == "vehicle_follow" and speed_limit is not None:
+        if event in (
+            "vehicle_follow",
+            "traffic_light_red_approach",
+            "traffic_light_yellow_slow",
+        ) and speed_limit is not None:
             return (
                 min(target_speed_mps, max(0.0, float(speed_limit))),
-                f"{speed_reason}+vehicle_follow",
+                f"{speed_reason}+{event}",
             )
 
-        if event not in ("vehicle_stop", "pedestrian_stop"):
+        if event not in (
+            "vehicle_stop",
+            "pedestrian_stop",
+            "traffic_light_red_stop",
+            "traffic_light_yellow_stop",
+        ):
             return target_speed_mps, speed_reason
 
+        if (
+            event in ("traffic_light_red_stop", "traffic_light_yellow_stop")
+            and bool(route_event.get("stop_required", False))
+        ):
+            return 0.0, f"{speed_reason}+{event}"
+
         distance_m = max(0.0, float(route_event.get("distance_m") or 0.0))
-        remaining_distance_m = max(0.0, distance_m - self.event_stop_buffer_m)
+        distance_is_buffered = bool(route_event.get("distance_is_buffered", False))
+        if distance_is_buffered:
+            remaining_distance_m = distance_m
+            stop_threshold_m = 0.5
+        else:
+            stop_buffer_m = max(
+                0.0,
+                float(route_event.get("stop_buffer_m") or self.event_stop_buffer_m),
+            )
+            remaining_distance_m = max(0.0, distance_m - stop_buffer_m)
+            stop_threshold_m = stop_buffer_m
         approach_speed_mps = math.sqrt(
             2.0
             * max(0.1, self.event_stop_deceleration_mps2)
             * remaining_distance_m
         )
-        if distance_m <= self.event_stop_buffer_m:
+        if distance_m <= stop_threshold_m:
             approach_speed_mps = 0.0
 
         return (
@@ -173,8 +198,54 @@ class LaneFollower(Node):
             if active_route_event is not None
             else None
         )
+        route_event_distance_to_stop_m = (
+            active_route_event.get(
+                "distance_to_stop_m",
+                route_event_distance_m,
+            )
+            if active_route_event is not None
+            else None
+        )
         route_event_speed_limit_mps = (
             active_route_event.get("target_speed_limit_mps")
+            if active_route_event is not None
+            else None
+        )
+        route_event_traffic_light_state = (
+            active_route_event.get("traffic_light_state")
+            if active_route_event is not None
+            else None
+        )
+        route_event_reason = (
+            active_route_event.get("reason")
+            if active_route_event is not None
+            else None
+        )
+        route_event_stop_required = bool(
+            active_route_event.get("stop_required", False)
+            if active_route_event is not None
+            else False
+        )
+        route_event_stop_point_source = (
+            active_route_event.get("stop_point_source")
+            if active_route_event is not None
+            else None
+        )
+        route_event_confidence = (
+            active_route_event.get("confidence")
+            if active_route_event is not None
+            else None
+        )
+        tl_stop_route_index = (
+            active_route_event.get(
+                "stop_route_index",
+                active_route_event.get("route_index"),
+            )
+            if active_route_event is not None
+            else None
+        )
+        tl_stop_s = (
+            active_route_event.get("stop_s")
             if active_route_event is not None
             else None
         )
@@ -199,6 +270,11 @@ class LaneFollower(Node):
                 "route_event": route_event_name,
                 "route_event_distance_m": route_event_distance_m,
                 "route_event_speed_limit_mps": route_event_speed_limit_mps,
+                "route_event_traffic_light_state": route_event_traffic_light_state,
+                "route_event_reason": route_event_reason,
+                "route_event_stop_required": route_event_stop_required,
+                "route_event_stop_point_source": route_event_stop_point_source,
+                "route_event_confidence": route_event_confidence,
                 "route_event_age_s": route_event_age_s,
             }
             msg = String()
@@ -234,6 +310,11 @@ class LaneFollower(Node):
                 "route_event": route_event_name,
                 "route_event_distance_m": route_event_distance_m,
                 "route_event_speed_limit_mps": route_event_speed_limit_mps,
+                "route_event_traffic_light_state": route_event_traffic_light_state,
+                "route_event_reason": route_event_reason,
+                "route_event_stop_required": route_event_stop_required,
+                "route_event_stop_point_source": route_event_stop_point_source,
+                "route_event_confidence": route_event_confidence,
                 "route_event_age_s": route_event_age_s,
             }
             msg = String(); msg.data = json.dumps(plan); self.plan_pub.publish(msg)
@@ -255,17 +336,28 @@ class LaneFollower(Node):
             str(profile["speed_reason"]),
             active_route_event,
         )
+        force_event_stop = (
+            active_route_event is not None
+            and route_event_name in (
+                "traffic_light_red_stop",
+                "traffic_light_yellow_stop",
+            )
+            and route_event_stop_required
+        )
         speed_error = target_speed - self.last_target_speed
         if speed_error > 0:
             max_delta = self.speed_slew_up_mps_per_s / max(1.0, self.rate_hz)
         else:
             max_delta = self.speed_slew_down_mps_per_s / max(1.0, self.rate_hz)
 
-        self.last_target_speed = clamp(
-            self.last_target_speed + clamp(speed_error, -max_delta, max_delta),
-            0.0,
-            self.max_speed_mps,
-        )
+        if force_event_stop:
+            self.last_target_speed = 0.0
+        else:
+            self.last_target_speed = clamp(
+                self.last_target_speed + clamp(speed_error, -max_delta, max_delta),
+                0.0,
+                self.max_speed_mps,
+            )
 
         lookahead_m = self.base_lookahead_m
         if self.dynamic_lookahead_enabled:
@@ -280,7 +372,8 @@ class LaneFollower(Node):
 
         target = None
         selected_target_index = None
-        for index, pt in enumerate(points):
+        for index in range(nearest_index, len(points)):
+            pt = points[index]
             dx = float(pt.get("x", 0.0)) - ego_x
             dy = float(pt.get("y", 0.0)) - ego_y
             dist = math.hypot(dx, dy)
@@ -292,6 +385,54 @@ class LaneFollower(Node):
         if target is None:
             target = points[-1]
             selected_target_index = len(points) - 1
+
+        tl_target_clamped = False
+        gate_events = (
+            "traffic_light_red_approach",
+            "traffic_light_red_stop",
+            "traffic_light_yellow_slow",
+            "traffic_light_yellow_stop",
+        )
+        gate_cap_allowed = (
+            active_route_event is not None
+            and (
+                (
+                    bool(
+                        active_route_event.get(
+                            "fence_intersection_found",
+                            False,
+                        )
+                    )
+                    and route_event_confidence in ("high", "medium")
+                )
+                or (
+                    route_event_distance_to_stop_m is not None
+                    and float(route_event_distance_to_stop_m) <= 1.0
+                )
+            )
+        )
+        if (
+            active_route_event is not None
+            and route_event_name in gate_events
+            and tl_stop_route_index is not None
+            and gate_cap_allowed
+        ):
+            stop_index = max(
+                nearest_index,
+                min(len(points) - 1, int(tl_stop_route_index)),
+            )
+            if selected_target_index is None or selected_target_index >= stop_index:
+                target = dict(points[stop_index])
+                stop_x = active_route_event.get("stop_x")
+                stop_y = active_route_event.get("stop_y")
+                stop_z = active_route_event.get("stop_z")
+                if stop_x is not None and stop_y is not None:
+                    target["x"] = float(stop_x)
+                    target["y"] = float(stop_y)
+                    if stop_z is not None:
+                        target["z"] = float(stop_z)
+                selected_target_index = stop_index
+                tl_target_clamped = True
 
         tx = float(target.get("x", 0.0))
         ty = float(target.get("y", 0.0))
@@ -332,7 +473,16 @@ class LaneFollower(Node):
             "route_event": route_event_name,
             "route_event_distance_m": route_event_distance_m,
             "route_event_speed_limit_mps": route_event_speed_limit_mps,
+            "route_event_traffic_light_state": route_event_traffic_light_state,
+            "route_event_reason": route_event_reason,
+            "route_event_stop_required": route_event_stop_required,
+            "route_event_stop_point_source": route_event_stop_point_source,
+            "route_event_confidence": route_event_confidence,
             "route_event_age_s": route_event_age_s,
+            "tl_stop_route_index": tl_stop_route_index,
+            "tl_target_clamped": tl_target_clamped,
+            "tl_stop_s": tl_stop_s,
+            "tl_distance_to_stop_m": route_event_distance_to_stop_m,
         }
 
         msg = String()
@@ -352,7 +502,16 @@ class LaneFollower(Node):
             "route_event": route_event_name,
             "route_event_distance_m": route_event_distance_m,
             "route_event_speed_limit_mps": route_event_speed_limit_mps,
+            "route_event_traffic_light_state": route_event_traffic_light_state,
+            "route_event_reason": route_event_reason,
+            "route_event_stop_required": route_event_stop_required,
+            "route_event_stop_point_source": route_event_stop_point_source,
+            "route_event_confidence": route_event_confidence,
             "route_event_age_s": route_event_age_s,
+            "tl_stop_route_index": tl_stop_route_index,
+            "tl_target_clamped": tl_target_clamped,
+            "tl_stop_s": tl_stop_s,
+            "tl_distance_to_stop_m": route_event_distance_to_stop_m,
         })
         self.debug_pub.publish(dbg)
 

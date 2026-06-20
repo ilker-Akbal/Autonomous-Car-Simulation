@@ -36,7 +36,7 @@ class CarlaSensorBridgeNode(Node):
         # -------------------------
         # CARLA connection params
         # -------------------------
-        self.declare_parameter("carla_root", "/home/ilker/simulators/CARLA_0.9.15")
+        self.declare_parameter("carla_root", "/mnt/carla/CARLA_0.9.15")
         self.declare_parameter("host", "127.0.0.1")
         self.declare_parameter("port", 2000)
         self.declare_parameter("timeout", 10.0)

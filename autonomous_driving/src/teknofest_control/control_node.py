@@ -50,6 +50,8 @@ class ControlNode(Node):
         self.integral = 0.0
         self.last_throttle = 0.0
         self.last_steer = 0.0
+        self.stop_hold_active = False
+        self.stop_hold_reason = None
 
         self.create_subscription(String, "/adas/planning/lane_plan", self._plan_cb, 10)
         self.create_subscription(String, "/adas/carla/status", self._status_cb, 10)
@@ -100,14 +102,38 @@ class ControlNode(Node):
         route_event = "clear"
         route_event_distance_m = None
         event_stop = False
-        stop_hold = False
+        event_stop_reason = None
+        stop_hold = self.stop_hold_active
+        stop_hold_reason = self.stop_hold_reason
 
         if plan_ok:
             target_speed = float(self.last_plan.get("target_speed_mps", 0.0))
             target_steer = float(self.last_plan.get("steer", 0.0))
             route_event = str(self.last_plan.get("route_event", "clear"))
             route_event_distance_m = self.last_plan.get("route_event_distance_m")
-            event_stop = route_event in ("vehicle_stop", "pedestrian_stop")
+            event_stop = route_event in (
+                "vehicle_stop",
+                "pedestrian_stop",
+                "traffic_light_red_stop",
+                "traffic_light_yellow_stop",
+            )
+            if event_stop:
+                event_stop_reason = route_event
+            if route_event in (
+                "traffic_light_red_stop",
+                "traffic_light_yellow_stop",
+            ):
+                target_speed = 0.0
+
+        release_stop_hold = (
+            route_event in ("clear", "traffic_light_green_release")
+            and target_speed > 0.3
+        )
+        if release_stop_hold:
+            self.stop_hold_active = False
+            self.stop_hold_reason = None
+            stop_hold = False
+            stop_hold_reason = None
 
         if timeout_stop:
             self.integral = 0.0
@@ -150,15 +176,44 @@ class ControlNode(Node):
                     and route_event_distance_m is not None
                     and float(route_event_distance_m) <= 1.5
                 ):
-                    brake = self.max_brake
+                    brake = min(max(brake, 0.35), self.max_brake)
                 throttle = 0.0
             elif target_speed <= 0.1 and current_speed < 0.2:
                 throttle = 0.0
                 brake = min(0.2, self.max_brake)
                 stop_hold = True
+                event_stop = event_stop or stop_hold
+                stop_hold_reason = (
+                    route_event
+                    if route_event != "clear"
+                    else "zero_target_speed"
+                )
+                if event_stop_reason is None:
+                    event_stop_reason = stop_hold_reason
+                self.stop_hold_active = True
+                self.stop_hold_reason = stop_hold_reason
             elif target_speed <= 0.1:
                 throttle = 0.0
                 brake = min(0.2, self.max_brake)
+
+            if self.stop_hold_active and not release_stop_hold:
+                stop_hold = True
+                stop_hold_reason = self.stop_hold_reason
+                event_stop = True
+                if event_stop_reason is None:
+                    event_stop_reason = stop_hold_reason
+                throttle = 0.0
+                brake = min(
+                    max(brake, 0.2 if current_speed < 0.2 else 0.35),
+                    self.max_brake,
+                )
+
+            if release_stop_hold:
+                stop_hold = False
+                stop_hold_reason = None
+                event_stop = False
+                event_stop_reason = None
+                brake = 0.0
 
             delta = throttle - self.last_throttle
             delta = _clamp(delta, -self.throttle_slew_limit, self.throttle_slew_limit)
@@ -192,6 +247,8 @@ class ControlNode(Node):
             "hand_brake": False,
             "stop_hold": stop_hold,
             "event_stop": event_stop,
+            "event_stop_reason": event_stop_reason,
+            "stop_hold_reason": stop_hold_reason,
         }
 
         m = String()
@@ -211,6 +268,8 @@ class ControlNode(Node):
             "timeout_stop": timeout_stop,
             "stop_hold": stop_hold,
             "event_stop": event_stop,
+            "event_stop_reason": event_stop_reason,
+            "stop_hold_reason": stop_hold_reason,
             "route_event": route_event,
             "route_event_distance_m": route_event_distance_m,
         })

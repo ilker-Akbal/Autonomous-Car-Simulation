@@ -1,4 +1,7 @@
+import glob
 import json
+import os
+import sys
 import time
 from typing import Any, List, Optional
 
@@ -14,7 +17,10 @@ class GlobalRoutePlannerNode(Node):
     def __init__(self):
         super().__init__("global_route_planner")
 
-        self.declare_parameter("carla_root", "/home/ilker/simulators/CARLA_0.9.15")
+        self.declare_parameter(
+            "carla_root",
+            "/home/ilker/simulators/CARLA_0.9.15",
+        )
         self.declare_parameter("host", "127.0.0.1")
         self.declare_parameter("port", 2000)
         self.declare_parameter("ego_role_name", "ego_vehicle")
@@ -48,6 +54,8 @@ class GlobalRoutePlannerNode(Node):
         self._route_planner = None
         self._planner_api = "failed"
         self._replan_reason = "planner_not_initialized"
+        self._carla_root_used: Optional[str] = None
+        self._agents_import_path: Optional[str] = None
         self._last_warning_times: dict[str, float] = {}
         self._carla = None
 
@@ -60,9 +68,51 @@ class GlobalRoutePlannerNode(Node):
         self._connect_to_carla()
         self.timer = self.create_timer(max(0.1, self.replan_period_s), self._tick)
 
+    def _candidate_carla_roots(self) -> list[str]:
+        roots = [
+            str(self.carla_root),
+            "/home/ilker/simulators/CARLA_0.9.15",
+            "/mnt/carla/CARLA_0.9.15",
+        ]
+        unique_roots = []
+        for root in roots:
+            normalized = os.path.abspath(os.path.expanduser(root))
+            if normalized not in unique_roots:
+                unique_roots.append(normalized)
+        return unique_roots
+
+    def _prepare_carla_python_paths(self) -> None:
+        self._agents_import_path = None
+        for root in self._candidate_carla_roots():
+            python_api = os.path.join(root, "PythonAPI", "carla")
+            if os.path.isdir(os.path.join(python_api, "agents")):
+                if python_api not in sys.path:
+                    sys.path.insert(0, python_api)
+                if self._agents_import_path is None:
+                    self._agents_import_path = python_api
+                    self._carla_root_used = root
+
+            egg_pattern = os.path.join(python_api, "dist", "*.egg")
+            for egg_path in sorted(glob.glob(egg_pattern)):
+                if egg_path not in sys.path:
+                    sys.path.append(egg_path)
+
+    def _load_carla_with_fallback(self):
+        self._prepare_carla_python_paths()
+        errors = []
+        for root in self._candidate_carla_roots():
+            try:
+                carla = load_carla(root)
+                if self._carla_root_used is None:
+                    self._carla_root_used = root
+                return carla
+            except Exception as exc:
+                errors.append(f"{root}: {exc}")
+        raise RuntimeError("; ".join(errors))
+
     def _connect_to_carla(self) -> None:
         try:
-            self._carla = load_carla(self.carla_root)
+            self._carla = self._load_carla_with_fallback()
             self._client = self._carla.Client(self.host, self.port)
             self._client.set_timeout(10.0)
             self._world = self._client.get_world()
@@ -87,6 +137,7 @@ class GlobalRoutePlannerNode(Node):
             self._replan_reason = "carla_map_unavailable"
             return False
 
+        self._prepare_carla_python_paths()
         try:
             from agents.navigation.global_route_planner import GlobalRoutePlanner
         except Exception as exc:
@@ -306,6 +357,8 @@ class GlobalRoutePlannerNode(Node):
             "route_ok": route_ok,
             "status_ok": self._last_status is not None,
             "planner_api": self._planner_api,
+            "carla_root_used": self._carla_root_used,
+            "agents_import_path": self._agents_import_path,
             "replan_reason": None if route_ok else self._replan_reason,
         }
 
@@ -319,6 +372,8 @@ class GlobalRoutePlannerNode(Node):
             "goal_index": self._last_goal.get("nokta_id") if self._last_goal else None,
             "route_len": len(self._route_points),
             "planner_api": self._planner_api,
+            "carla_root_used": self._carla_root_used,
+            "agents_import_path": self._agents_import_path,
             "replan_reason": None if route_ok else self._replan_reason,
             "distance_to_route_m": self._distance_to_route(
                 float(self._last_status.get("location", {}).get("x", 0.0)),

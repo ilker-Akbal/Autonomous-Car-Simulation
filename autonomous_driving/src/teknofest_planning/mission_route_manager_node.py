@@ -15,12 +15,14 @@ class MissionRouteManager(Node):
     def __init__(self):
         super().__init__("mission_route_manager")
 
+        self.declare_parameter("carla_root", "/mnt/carla/CARLA_0.9.15")
         self.declare_parameter("mission_geojson", "")
         self.declare_parameter("target_reached_distance_m", 4.0)
         self.declare_parameter("publish_rate_hz", 2.0)
         self.declare_parameter("loop_mission", False)
         self.declare_parameter("competition_mode", True)
 
+        self.carla_root = self.get_parameter("carla_root").value
         self.mission_geojson = self.get_parameter("mission_geojson").value
         self.target_reached_distance_m = float(self.get_parameter("target_reached_distance_m").value)
         self.publish_rate_hz = float(self.get_parameter("publish_rate_hz").value)
