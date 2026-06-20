@@ -1,7 +1,7 @@
 import json
 import math
 import time
-from typing import Any
+from typing import Any, Optional
 
 import rclpy
 from rclpy.node import Node
@@ -32,6 +32,9 @@ class LaneFollower(Node):
         self.declare_parameter("moderate_turn_yaw_deg", 18.0)
         self.declare_parameter("speed_slew_up_mps_per_s", 0.8)
         self.declare_parameter("speed_slew_down_mps_per_s", 2.0)
+        self.declare_parameter("route_event_timeout_s", 0.75)
+        self.declare_parameter("event_stop_deceleration_mps2", 1.5)
+        self.declare_parameter("event_stop_buffer_m", 1.0)
         self.declare_parameter("rate_hz", 20.0)
 
         self.base_lookahead_m = float(self.get_parameter("base_lookahead_m").value)
@@ -49,6 +52,11 @@ class LaneFollower(Node):
         self.moderate_turn_yaw_deg = float(self.get_parameter("moderate_turn_yaw_deg").value)
         self.speed_slew_up_mps_per_s = float(self.get_parameter("speed_slew_up_mps_per_s").value)
         self.speed_slew_down_mps_per_s = float(self.get_parameter("speed_slew_down_mps_per_s").value)
+        self.route_event_timeout_s = float(self.get_parameter("route_event_timeout_s").value)
+        self.event_stop_deceleration_mps2 = float(
+            self.get_parameter("event_stop_deceleration_mps2").value
+        )
+        self.event_stop_buffer_m = float(self.get_parameter("event_stop_buffer_m").value)
         self.rate_hz = float(self.get_parameter("rate_hz").value)
 
         if self.target_speed_mps_param != 3.0 and self.cruise_speed_mps == 4.5:
@@ -56,12 +64,15 @@ class LaneFollower(Node):
 
         self.route = None
         self.ego = None
+        self.route_event = None
         self.last_route_time = 0.0
         self.last_status_time = 0.0
+        self.last_route_event_time = 0.0
         self.last_target_speed = 0.0
 
         self.create_subscription(String, "/adas/planning/route", self._route_cb, 10)
         self.create_subscription(String, "/adas/carla/status", self._status_cb, 10)
+        self.create_subscription(String, "/adas/planning/route_events", self._route_event_cb, 10)
 
         self.plan_pub = self.create_publisher(String, "/adas/planning/lane_plan", 10)
         self.debug_pub = self.create_publisher(String, "/adas/planning/lane_debug", 10)
@@ -82,6 +93,59 @@ class LaneFollower(Node):
         except Exception:
             self.get_logger().warn("Failed to parse carla status JSON")
 
+    def _route_event_cb(self, msg: String):
+        try:
+            self.route_event = json.loads(msg.data)
+            self.last_route_event_time = time.time()
+        except Exception:
+            self.get_logger().warn("Failed to parse route_events JSON")
+
+    def _active_route_event(self, now: float) -> tuple[Optional[dict[str, Any]], Optional[float]]:
+        if self.route_event is None or self.last_route_event_time <= 0.0:
+            return None, None
+
+        age_s = now - self.last_route_event_time
+        if age_s > self.route_event_timeout_s:
+            return None, age_s
+        if not self.route_event.get("ok", False):
+            return None, age_s
+        return self.route_event, age_s
+
+    def _apply_route_event_speed_limit(
+        self,
+        target_speed_mps: float,
+        speed_reason: str,
+        route_event: Optional[dict[str, Any]],
+    ) -> tuple[float, str]:
+        if route_event is None:
+            return target_speed_mps, speed_reason
+
+        event = str(route_event.get("event", "clear"))
+        speed_limit = route_event.get("target_speed_limit_mps")
+        if event == "vehicle_follow" and speed_limit is not None:
+            return (
+                min(target_speed_mps, max(0.0, float(speed_limit))),
+                f"{speed_reason}+vehicle_follow",
+            )
+
+        if event not in ("vehicle_stop", "pedestrian_stop"):
+            return target_speed_mps, speed_reason
+
+        distance_m = max(0.0, float(route_event.get("distance_m") or 0.0))
+        remaining_distance_m = max(0.0, distance_m - self.event_stop_buffer_m)
+        approach_speed_mps = math.sqrt(
+            2.0
+            * max(0.1, self.event_stop_deceleration_mps2)
+            * remaining_distance_m
+        )
+        if distance_m <= self.event_stop_buffer_m:
+            approach_speed_mps = 0.0
+
+        return (
+            min(target_speed_mps, approach_speed_mps),
+            f"{speed_reason}+{event}",
+        )
+
     def _find_nearest_index(self, points: list[dict[str, Any]], ego_x: float, ego_y: float) -> int:
         nearest_index = 0
         nearest_dist = float("inf")
@@ -98,6 +162,22 @@ class LaneFollower(Node):
         now = time.time()
         status_ok = (now - self.last_status_time) < 1.0
         route_ok = (self.route is not None) and (now - self.last_route_time) < 2.0
+        active_route_event, route_event_age_s = self._active_route_event(now)
+        route_event_name = (
+            str(active_route_event.get("event", "clear"))
+            if active_route_event is not None
+            else "clear"
+        )
+        route_event_distance_m = (
+            active_route_event.get("distance_m")
+            if active_route_event is not None
+            else None
+        )
+        route_event_speed_limit_mps = (
+            active_route_event.get("target_speed_limit_mps")
+            if active_route_event is not None
+            else None
+        )
 
         route_source = self.route.get("route_source", "unknown") if self.route else "unknown"
         if not status_ok or not route_ok:
@@ -116,6 +196,10 @@ class LaneFollower(Node):
                 "route_ok": bool(route_ok),
                 "status_ok": bool(status_ok),
                 "target": None,
+                "route_event": route_event_name,
+                "route_event_distance_m": route_event_distance_m,
+                "route_event_speed_limit_mps": route_event_speed_limit_mps,
+                "route_event_age_s": route_event_age_s,
             }
             msg = String()
             msg.data = json.dumps(plan)
@@ -147,6 +231,10 @@ class LaneFollower(Node):
                 "route_ok": False,
                 "status_ok": True,
                 "target": None,
+                "route_event": route_event_name,
+                "route_event_distance_m": route_event_distance_m,
+                "route_event_speed_limit_mps": route_event_speed_limit_mps,
+                "route_event_age_s": route_event_age_s,
             }
             msg = String(); msg.data = json.dumps(plan); self.plan_pub.publish(msg)
             return
@@ -162,7 +250,11 @@ class LaneFollower(Node):
             sharp_turn_yaw_deg=self.sharp_turn_yaw_deg,
         )
 
-        target_speed = float(profile["target_speed_mps"])
+        target_speed, speed_reason = self._apply_route_event_speed_limit(
+            float(profile["target_speed_mps"]),
+            str(profile["speed_reason"]),
+            active_route_event,
+        )
         speed_error = target_speed - self.last_target_speed
         if speed_error > 0:
             max_delta = self.speed_slew_up_mps_per_s / max(1.0, self.rate_hz)
@@ -229,7 +321,7 @@ class LaneFollower(Node):
             "cruise_speed_mps": self.cruise_speed_mps,
             "target_speed_mps": round(self.last_target_speed, 3),
             "turn_intensity": round(float(profile["turn_intensity"]), 3),
-            "speed_reason": profile["speed_reason"],
+            "speed_reason": speed_reason,
             "nearest_index": nearest_index,
             "selected_target_index": selected_target_index,
             "lookahead_m": round(lookahead_m, 3),
@@ -237,6 +329,10 @@ class LaneFollower(Node):
             "route_ok": True,
             "status_ok": True,
             "target": {"x": tx, "y": ty},
+            "route_event": route_event_name,
+            "route_event_distance_m": route_event_distance_m,
+            "route_event_speed_limit_mps": route_event_speed_limit_mps,
+            "route_event_age_s": route_event_age_s,
         }
 
         msg = String()
@@ -252,7 +348,11 @@ class LaneFollower(Node):
             "cruise_speed_mps": self.cruise_speed_mps,
             "target_speed_mps": self.last_target_speed,
             "turn_intensity": profile["turn_intensity"],
-            "speed_reason": profile["speed_reason"],
+            "speed_reason": speed_reason,
+            "route_event": route_event_name,
+            "route_event_distance_m": route_event_distance_m,
+            "route_event_speed_limit_mps": route_event_speed_limit_mps,
+            "route_event_age_s": route_event_age_s,
         })
         self.debug_pub.publish(dbg)
 

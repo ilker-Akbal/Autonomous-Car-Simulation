@@ -56,6 +56,13 @@ def generate_launch_description():
     route_source_mode = LaunchConfiguration("route_source_mode")
     fallback_to_simple_forward_route = LaunchConfiguration("fallback_to_simple_forward_route")
     hold_last_route_s = LaunchConfiguration("hold_last_route_s")
+    enable_route_events = LaunchConfiguration("enable_route_events")
+    route_event_horizon_m = LaunchConfiguration("route_event_horizon_m")
+    route_lateral_margin_m = LaunchConfiguration("route_lateral_margin_m")
+    vehicle_follow_distance_m = LaunchConfiguration("vehicle_follow_distance_m")
+    vehicle_stop_distance_m = LaunchConfiguration("vehicle_stop_distance_m")
+    pedestrian_stop_distance_m = LaunchConfiguration("pedestrian_stop_distance_m")
+    follow_time_gap_s = LaunchConfiguration("follow_time_gap_s")
     mission_geojson = LaunchConfiguration("mission_geojson")
     target_reached_distance_m = LaunchConfiguration("target_reached_distance_m")
     loop_mission = LaunchConfiguration("loop_mission")
@@ -128,6 +135,13 @@ def generate_launch_description():
         DeclareLaunchArgument("route_source_mode", default_value="global"),
         DeclareLaunchArgument("fallback_to_simple_forward_route", default_value="true"),
         DeclareLaunchArgument("hold_last_route_s", default_value="2.0"),
+        DeclareLaunchArgument("enable_route_events", default_value="true"),
+        DeclareLaunchArgument("route_event_horizon_m", default_value="45.0"),
+        DeclareLaunchArgument("route_lateral_margin_m", default_value="3.0"),
+        DeclareLaunchArgument("vehicle_follow_distance_m", default_value="10.0"),
+        DeclareLaunchArgument("vehicle_stop_distance_m", default_value="6.0"),
+        DeclareLaunchArgument("pedestrian_stop_distance_m", default_value="8.0"),
+        DeclareLaunchArgument("follow_time_gap_s", default_value="1.5"),
         DeclareLaunchArgument("mission_geojson", default_value=str(default_mission_geojson)),
         DeclareLaunchArgument("target_reached_distance_m", default_value="4.0"),
         DeclareLaunchArgument("loop_mission", default_value="false"),
@@ -253,6 +267,33 @@ def generate_launch_description():
                         "local_route_horizon_m": ParameterValue(local_route_horizon_m, value_type=float),
                         "min_route_points": ParameterValue(min_route_points, value_type=int),
                         "rate_hz": 5.0,
+                    }],
+                ),
+            ],
+        ),
+
+        TimerAction(
+            period=10.5,
+            actions=[
+                Node(
+                    package="autonomous_driving",
+                    executable="route_event_analyzer_node",
+                    name="route_event_analyzer",
+                    output="screen",
+                    condition=IfCondition(enable_route_events),
+                    parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
+                        "host": ParameterValue(host, value_type=str),
+                        "port": ParameterValue(port, value_type=int),
+                        "ego_role_name": ParameterValue(ego_role_name, value_type=str),
+                        "publish_rate_hz": 10.0,
+                        "event_horizon_m": ParameterValue(route_event_horizon_m, value_type=float),
+                        "route_lateral_margin_m": ParameterValue(route_lateral_margin_m, value_type=float),
+                        "vehicle_follow_distance_m": ParameterValue(vehicle_follow_distance_m, value_type=float),
+                        "vehicle_stop_distance_m": ParameterValue(vehicle_stop_distance_m, value_type=float),
+                        "pedestrian_stop_distance_m": ParameterValue(pedestrian_stop_distance_m, value_type=float),
+                        "follow_time_gap_s": ParameterValue(follow_time_gap_s, value_type=float),
+                        "stale_route_timeout_s": 1.0,
                     }],
                 ),
             ],

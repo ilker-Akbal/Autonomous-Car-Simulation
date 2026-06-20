@@ -97,10 +97,17 @@ class ControlNode(Node):
         target_speed = 0.0
         target_steer = 0.0
         raw_throttle = 0.0
+        route_event = "clear"
+        route_event_distance_m = None
+        event_stop = False
+        stop_hold = False
 
         if plan_ok:
             target_speed = float(self.last_plan.get("target_speed_mps", 0.0))
             target_steer = float(self.last_plan.get("steer", 0.0))
+            route_event = str(self.last_plan.get("route_event", "clear"))
+            route_event_distance_m = self.last_plan.get("route_event_distance_m")
+            event_stop = route_event in ("vehicle_stop", "pedestrian_stop")
 
         if timeout_stop:
             self.integral = 0.0
@@ -132,9 +139,26 @@ class ControlNode(Node):
                 brake = _clamp(-self.brake_kp * error, 0.0, self.max_brake)
                 throttle = 0.0
 
-            if target_speed <= 0.05 and current_speed > 0.1:
-                brake = self.max_brake
+            if target_speed <= 0.1 and current_speed > 0.3:
+                brake = _clamp(
+                    max(0.15, self.brake_kp * current_speed),
+                    0.0,
+                    self.max_brake,
+                )
+                if (
+                    event_stop
+                    and route_event_distance_m is not None
+                    and float(route_event_distance_m) <= 1.5
+                ):
+                    brake = self.max_brake
                 throttle = 0.0
+            elif target_speed <= 0.1 and current_speed < 0.2:
+                throttle = 0.0
+                brake = min(0.2, self.max_brake)
+                stop_hold = True
+            elif target_speed <= 0.1:
+                throttle = 0.0
+                brake = min(0.2, self.max_brake)
 
             delta = throttle - self.last_throttle
             delta = _clamp(delta, -self.throttle_slew_limit, self.throttle_slew_limit)
@@ -166,6 +190,8 @@ class ControlNode(Node):
             "steer": round(float(self.last_steer), 3),
             "reverse": False,
             "hand_brake": False,
+            "stop_hold": stop_hold,
+            "event_stop": event_stop,
         }
 
         m = String()
@@ -183,6 +209,10 @@ class ControlNode(Node):
             "brake": round(float(brake), 3),
             "steer": round(float(self.last_steer), 3),
             "timeout_stop": timeout_stop,
+            "stop_hold": stop_hold,
+            "event_stop": event_stop,
+            "route_event": route_event,
+            "route_event_distance_m": route_event_distance_m,
         })
         self.debug_pub.publish(dbg)
 
