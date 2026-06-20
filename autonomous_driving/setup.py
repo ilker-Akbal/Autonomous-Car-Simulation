@@ -33,6 +33,10 @@ setup(
             'teknofest_diagnostics_node = teknofest_common.diagnostics_node:main',
             'lane_detector_node = teknofest_perception.lane_detector_node:main',
             'ekf_localizer_node = teknofest_localization.ekf_localizer_node:main',
+            'simple_route_planner_node = teknofest_planning.simple_route_planner_node:main',
+            'lane_follower_node = teknofest_planning.lane_follower_node:main',
+            'control_node = teknofest_control.control_node:main',
+            'carla_control_adapter_node = ros2_nodes.carla_control_adapter_node:main',
         ],
     },
 )
