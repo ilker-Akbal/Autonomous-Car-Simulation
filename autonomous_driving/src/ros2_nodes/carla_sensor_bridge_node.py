@@ -19,6 +19,17 @@ carla = None
 
 class CarlaSensorBridgeNode(Node):
 
+    @staticmethod
+    def _parse_bool(value):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            value_lower = value.strip().lower()
+            return value_lower not in ("false", "0", "no", "off", "none", "n", "f", "")
+        return False
+
     def __init__(self):
         super().__init__("carla_sensor_bridge_node")
 
@@ -183,28 +194,65 @@ class CarlaSensorBridgeNode(Node):
             10,
         )
 
+        self.zed_enabled = self._parse_bool(self.get_parameter("zed_enabled").value)
+        self.depth_enabled = self._parse_bool(self.get_parameter("depth_enabled").value)
+        self.lidar_enabled = self._parse_bool(self.get_parameter("lidar_enabled").value)
+        self.zed_point_cloud_enabled = self._parse_bool(self.get_parameter("zed_point_cloud_enabled").value)
+        self.front_rgb_separate_enabled = self._parse_bool(self.get_parameter("front_rgb_separate_enabled").value)
+        self.front_rgb_from_zed_left = self._parse_bool(self.get_parameter("front_rgb_from_zed_left").value)
+        self.camera_width = int(self.get_parameter("camera_width").value)
+        self.camera_height = int(self.get_parameter("camera_height").value)
+        self.camera_sensor_tick = float(self.get_parameter("camera_sensor_tick").value)
+        self.lidar_points_per_second = int(self.get_parameter("lidar_points_per_second").value)
+        self.lidar_sensor_tick = float(self.get_parameter("lidar_sensor_tick").value)
+        self.lidar_channels = int(self.get_parameter("lidar_channels").value)
+
+        if self.zed_point_cloud_enabled:
+            self.zed_pc_pub = self.create_publisher(
+                PointCloud2,
+                self.get_parameter("zed_point_cloud_topic").value,
+                10,
+            )
+        else:
+            self.zed_pc_pub = None
 
         self.connect_to_carla()
         self.find_ego_vehicle()
 
-        if bool(self.get_parameter("front_rgb_separate_enabled").value) or not bool(self.get_parameter("zed_enabled").value):
+        if self.front_rgb_separate_enabled or not self.zed_enabled:
             self.spawn_front_camera()
         else:
-            self.get_logger().info("Separate front RGB camera disabled; /adas/camera/front/image_raw mirrors ZED left.")
+            self.get_logger().info(
+                "Separate front RGB camera disabled; /adas/camera/front/image_raw mirrors ZED left."
+            )
 
-        if bool(self.get_parameter("zed_enabled").value):
+        if self.zed_enabled:
             self.spawn_zed_left_right()
 
-        if bool(self.get_parameter("depth_enabled").value):
+        if self.depth_enabled:
             self.spawn_depth_camera()
 
         self.spawn_gnss()
         self.spawn_imu()
 
-        if bool(self.get_parameter("lidar_enabled").value):
+        if self.lidar_enabled:
             self.spawn_lidar()
 
         self.get_logger().info("CARLA sensor bridge hazır.")
+        self.get_logger().info(
+            f"Sensor profile: front_rgb_separate_enabled={self.front_rgb_separate_enabled}, "
+            f"front_rgb_from_zed_left={self.front_rgb_from_zed_left}, "
+            f"zed_enabled={self.zed_enabled}, "
+            f"depth_enabled={self.depth_enabled}, "
+            f"lidar_enabled={self.lidar_enabled}, "
+            f"zed_point_cloud_enabled={self.zed_point_cloud_enabled}, "
+            f"camera_width={self.camera_width}, "
+            f"camera_height={self.camera_height}, "
+            f"camera_sensor_tick={self.camera_sensor_tick}, "
+            f"lidar_points_per_second={self.lidar_points_per_second}, "
+            f"lidar_sensor_tick={self.lidar_sensor_tick}, "
+            f"lidar_channels={self.lidar_channels}"
+        )
         self.get_logger().info(f"Front RGB     -> {self.get_parameter('image_topic').value}")
         self.get_logger().info(f"GNSS          -> {self.get_parameter('gnss_topic').value}")
         self.get_logger().info(f"IMU           -> {self.get_parameter('imu_topic').value}")
@@ -588,7 +636,7 @@ class CarlaSensorBridgeNode(Node):
         info = self.make_camera_info(frame_id)
         self.depth_info_pub.publish(info)
 
-        if bool(self.get_parameter("zed_point_cloud_enabled").value):
+        if self.zed_point_cloud_enabled and self.zed_pc_pub is not None:
             pc_msg = self.depth_to_sparse_pointcloud(depth_m, frame_id)
             self.zed_pc_pub.publish(pc_msg)
 

@@ -30,6 +30,9 @@ setup(
             'carla_spectator_follow_node = teknofest_sim.carla_spectator_follow_node:main',
             'teknofest_spectator_follow_node = teknofest_sim.teknofest_spectator_follow_node:main',
             'viewport_camera_follow_node = teknofest_sim.viewport_camera_follow_node:main',
+            'teknofest_diagnostics_node = teknofest_common.diagnostics_node:main',
+            'lane_detector_node = teknofest_perception.lane_detector_node:main',
+            'ekf_localizer_node = teknofest_localization.ekf_localizer_node:main',
         ],
     },
 )

@@ -1,12 +1,14 @@
 /build/
-/install/
-/log/
-
+install/
+log/
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
 *.egg-info/
+.DS_Store
+.vscode/
+.idea/
+autonomous_driving/outputs/
 
 # Runtime loglar git'e girmesin
 autonomous_driving/outputs/teknofest_sim_logs/

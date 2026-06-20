@@ -1,7 +1,0 @@
-[console_scripts]
-carla_sensor_bridge_node = ros2_nodes.carla_sensor_bridge_node:main
-carla_spectator_follow_node = teknofest_sim.carla_spectator_follow_node:main
-carla_world_manager_node = ros2_nodes.carla_world_manager_node:main
-teknofest_spectator_follow_node = teknofest_sim.teknofest_spectator_follow_node:main
-viewport_camera_follow_node = teknofest_sim.viewport_camera_follow_node:main
-

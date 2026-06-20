@@ -1,3 +1,0 @@
-ros2_nodes
-teknofest_common
-teknofest_sim
