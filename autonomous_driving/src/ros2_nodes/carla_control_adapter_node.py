@@ -6,6 +6,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
+from teknofest_common.runtime_logging import RuntimeJsonlLogger
 from teknofest_sim.carla_loader import load_carla
 
 
@@ -28,6 +29,16 @@ class CarlaControlAdapter(Node):
         self.vehicle = None
         self.last_cmd = None
         self.last_cmd_time = 0.0
+        self.runtime_logger = RuntimeJsonlLogger(
+            node_name="carla_control_adapter_node",
+            file_name="carla_control_adapter_node.jsonl",
+        )
+        self.runtime_logger.update_summary({
+            "carla_control_adapter_log": self.runtime_logger.path(),
+        })
+        self.get_logger().info(
+            f"CarlaControlAdapter JSONL logging -> {self.runtime_logger.path()}"
+        )
 
         self.cmd_sub = self.create_subscription(String, "/adas/control/vehicle_command", self._cmd_cb, 10)
         self.debug_pub = self.create_publisher(String, "/adas/control/adapter_debug", 10)
@@ -103,8 +114,26 @@ class CarlaControlAdapter(Node):
             except Exception as exc:
                 self.get_logger().warn(f"Control adapter failed to apply control: {exc}")
 
-        dbg = String(); dbg.data = json.dumps({"stamp": now, "applied_cmd_present": cmd is not None})
+        debug_payload = {
+            "stamp": now,
+            "applied_cmd_present": cmd is not None,
+            "ego_id": self.vehicle.id if self.vehicle is not None else None,
+            "command_source_timeout": not (
+                self.last_cmd is not None and (now - self.last_cmd_time) <= self.command_timeout_s
+            ),
+            "final_vehicle_command": {
+                "throttle": float(cmd.get("throttle", 0.0)),
+                "brake": float(cmd.get("brake", 0.0)),
+                "steer": float(cmd.get("steer", 0.0)),
+            },
+        }
+        dbg = String(); dbg.data = json.dumps(debug_payload)
         self.debug_pub.publish(dbg)
+        self.runtime_logger.write({
+            "kind": "adapter_apply",
+            "debug": debug_payload,
+            "command": cmd,
+        })
 
     def destroy_node(self):
         # apply safe stop before shutdown

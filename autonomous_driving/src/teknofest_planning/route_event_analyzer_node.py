@@ -9,6 +9,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
+from teknofest_common.runtime_logging import RuntimeJsonlLogger
 from teknofest_planning.route_geometry import (
     cumulative_route_s,
     is_ahead_on_route,
@@ -217,11 +218,32 @@ class RouteEventAnalyzer(Node):
         self.red_hold_active = False
         self.stopped_for_tl_id: Optional[int] = None
         self.last_tl_event = "clear"
+        self.previous_tl_state: Optional[str] = None
+        self.green_release_triggered = False
+        self.red_hold_active_before = False
+        self.red_hold_active_after = False
+        self.stop_hold_cleared = False
+        self.release_reason: Optional[str] = None
+        self._green_release_details: dict[int, dict[str, Any]] = {}
 
         self._carla = None
         self._client = None
         self._world = None
         self._ego_vehicle = None
+        self._startup_snapshot_emitted = False
+        self._last_warning_debug_publish = 0.0
+        self._last_debug_reason: Optional[str] = None
+        self.runtime_logger = RuntimeJsonlLogger(
+            node_name="route_event_analyzer",
+            file_name="route_event_analyzer.jsonl",
+        )
+        self.runtime_logger.update_summary({
+            "phase2_log_session": self.runtime_logger.session_id,
+            "route_event_analyzer_log": self.runtime_logger.path(),
+        })
+        self.get_logger().info(
+            f"RouteEventAnalyzer JSONL logging -> {self.runtime_logger.path()}"
+        )
 
         self.create_subscription(String, "/adas/carla/status", self._status_callback, 10)
         self.create_subscription(String, "/adas/planning/route", self._route_callback, 10)
@@ -254,6 +276,92 @@ class RouteEventAnalyzer(Node):
             self._warn_throttled(
                 "carla_connection",
                 f"RouteEventAnalyzer: CARLA connection failed: {exc}",
+            )
+
+    @staticmethod
+    def _location_to_dict(location: Any) -> dict[str, float]:
+        return {
+            "x": round(float(getattr(location, "x", 0.0)), 3),
+            "y": round(float(getattr(location, "y", 0.0)), 3),
+            "z": round(float(getattr(location, "z", 0.0)), 3),
+        }
+
+    def _transform_to_dict(self, actor: Any) -> Optional[dict[str, Any]]:
+        try:
+            transform = actor.get_transform()
+        except Exception:
+            return None
+        return {
+            "location": self._location_to_dict(transform.location),
+            "rotation": {
+                "pitch": round(float(transform.rotation.pitch), 3),
+                "yaw": round(float(transform.rotation.yaw), 3),
+                "roll": round(float(transform.rotation.roll), 3),
+            },
+        }
+
+    def _traffic_light_snapshot(self, traffic_light: Any) -> dict[str, Any]:
+        state = self._get_traffic_light_state(traffic_light)
+        snapshot = {
+            "id": int(traffic_light.id),
+            "state": state,
+            "type_id": str(traffic_light.type_id),
+        }
+        transform = self._transform_to_dict(traffic_light)
+        if transform is not None:
+            snapshot["transform"] = transform
+        return snapshot
+
+    def _build_warning_payload(
+        self,
+        *,
+        reason: str,
+        map_name: Optional[str],
+        ego_location: dict[str, Any],
+        traffic_light_actor_count: int,
+    ) -> dict[str, Any]:
+        return {
+            "stamp": time.time(),
+            "ok": False,
+            "event": None,
+            "reason": reason,
+            "traffic_light_actor_count": int(traffic_light_actor_count),
+            "map": map_name,
+            "ego_location": ego_location,
+        }
+
+    def _emit_startup_tl_diagnostics(self) -> None:
+        if self._world is None or self._startup_snapshot_emitted:
+            return
+        try:
+            world_actors = self._world.get_actors()
+            traffic_lights = list(world_actors.filter("traffic.traffic_light*"))
+            map_name = self._world.get_map().name
+            snapshot = {
+                "kind": "startup_world_snapshot",
+                "map": map_name,
+                "total_actor_count": len(world_actors),
+                "traffic_light_actor_count": len(traffic_lights),
+                "traffic_lights": [
+                    self._traffic_light_snapshot(traffic_light)
+                    for traffic_light in traffic_lights
+                ],
+            }
+            self._startup_snapshot_emitted = True
+            self.runtime_logger.write(snapshot)
+            self.get_logger().info(
+                f"RouteEventAnalyzer startup diagnostics: map={map_name}, "
+                f"traffic_light_actor_count={len(traffic_lights)}"
+            )
+            if self.enable_traffic_light_events and not traffic_lights:
+                self.get_logger().warn(
+                    "TL EVENTS ENABLED BUT NO traffic.traffic_light ACTORS FOUND IN CARLA WORLD. "
+                    "RED LIGHT STOP CANNOT WORK ON THIS MAP."
+                )
+        except Exception as exc:
+            self._warn_throttled(
+                "startup_snapshot",
+                f"RouteEventAnalyzer: startup snapshot failed: {exc}",
             )
 
     def _status_callback(self, msg: String) -> None:
@@ -326,6 +434,15 @@ class RouteEventAnalyzer(Node):
             "stop_s": None,
             "distance_is_buffered": False,
             "reason": reason,
+            "active_tl_id": self.active_tl_id,
+            "active_tl_state": self.active_tl_state,
+            "previous_tl_state": self.previous_tl_state,
+            "stopped_for_tl_id": self.stopped_for_tl_id,
+            "green_release_triggered": self.green_release_triggered,
+            "red_hold_active_before": self.red_hold_active_before,
+            "red_hold_active_after": self.red_hold_active_after,
+            "stop_hold_cleared": self.stop_hold_cleared,
+            "release_reason": self.release_reason,
         }
 
     def _candidate(
@@ -360,7 +477,11 @@ class RouteEventAnalyzer(Node):
             "event": event,
             "target_speed_limit_mps": (
                 None
-                if event in ("clear", "traffic_light_green_release")
+                if event in (
+                    "clear",
+                    "traffic_light_green_clear",
+                    "traffic_light_green_release",
+                )
                 else (
                     0.0
                     if stop_required
@@ -466,6 +587,150 @@ class RouteEventAnalyzer(Node):
         self.active_stop_point_source = None
         self.red_hold_active = False
         self.stopped_for_tl_id = None
+
+    @staticmethod
+    def _find_actor_by_id(world_actors: Any, actor_id: int) -> Optional[Any]:
+        try:
+            actor = world_actors.find(int(actor_id))
+            if actor is not None:
+                return actor
+        except Exception:
+            pass
+        try:
+            return next(
+                actor for actor in world_actors if int(actor.id) == int(actor_id)
+            )
+        except (StopIteration, TypeError):
+            return None
+
+    def _release_active_traffic_light_hold(
+        self,
+        traffic_light: Any,
+        ego_route_s_m: float,
+        now_monotonic: float,
+        previous_state: Optional[str] = None,
+    ) -> dict[str, Any]:
+        traffic_light_id = int(traffic_light.id)
+        if previous_state is None:
+            previous_state = self.active_tl_state
+        active_stop_s = self.active_stop_s
+        active_stop_route_index = self.active_stop_route_index
+        active_stop_point_source = self.active_stop_point_source
+        stopped_for_tl_id = self.stopped_for_tl_id
+        red_hold_active_before = self.red_hold_active
+        stop_hold_cleared = bool(
+            red_hold_active_before
+            or stopped_for_tl_id is not None
+            or active_stop_s is not None
+            or active_stop_route_index is not None
+        )
+
+        self.previous_tl_state = previous_state
+        self.active_tl_id = traffic_light_id
+        self.active_tl_state = "Green"
+        self.active_tl_last_seen_time = now_monotonic
+        self.red_hold_active = False
+        self.stopped_for_tl_id = None
+        self.active_stop_route_index = None
+        self.active_stop_s = None
+        self.active_stop_point_source = None
+        self._restrictive_traffic_lights.pop(traffic_light_id, None)
+        self._last_restrictive_tl_candidate = None
+        self._last_restrictive_tl_time = 0.0
+        self._green_release_until[traffic_light_id] = (
+            now_monotonic + self.green_release_grace_s
+        )
+        self.last_tl_event = "traffic_light_green_clear"
+        self.green_release_triggered = True
+        self.red_hold_active_before = red_hold_active_before
+        self.red_hold_active_after = self.red_hold_active
+        self.stop_hold_cleared = stop_hold_cleared
+        self.release_reason = "active_light_green_release"
+
+        details = {
+            "active_tl_id": traffic_light_id,
+            "active_tl_state": "Green",
+            "previous_tl_state": previous_state,
+            "stopped_for_tl_id": None,
+            "green_release_triggered": True,
+            "red_hold_active_before": red_hold_active_before,
+            "red_hold_active_after": False,
+            "stop_hold_cleared": stop_hold_cleared,
+            "release_reason": "active_light_green_release",
+        }
+        self._green_release_details[traffic_light_id] = details
+
+        distance_to_stop_m = (
+            max(0.0, float(active_stop_s) - ego_route_s_m)
+            if active_stop_s is not None
+            else 0.0
+        )
+        projection = {
+            "route_index": int(active_stop_route_index or 0),
+            "lateral_distance_m": 0.0,
+        }
+        candidate = self._candidate(
+            "traffic_light_green_clear",
+            traffic_light,
+            projection,
+            distance_to_stop_m,
+            0.0,
+            "active_light_green_release",
+            traffic_light_state="Green",
+            stop_buffer_m=self.traffic_light_stop_buffer_m,
+            stop_point_source=active_stop_point_source,
+            distance_is_buffered=True,
+        )
+        candidate.update(details)
+        return candidate
+
+    def _poll_active_traffic_light(
+        self,
+        world_actors: Any,
+        ego_route_s_m: float,
+        now_monotonic: float,
+    ) -> Optional[dict[str, Any]]:
+        tracked_tl_id = (
+            self.stopped_for_tl_id
+            if self.stopped_for_tl_id is not None
+            else self.active_tl_id
+        )
+        if tracked_tl_id is None:
+            return None
+
+        traffic_light = self._find_actor_by_id(world_actors, tracked_tl_id)
+        if traffic_light is None or not str(traffic_light.type_id).startswith(
+            "traffic.traffic_light"
+        ):
+            return None
+
+        previous_state = self.active_tl_state
+        state = self._get_traffic_light_state(traffic_light)
+        self.previous_tl_state = previous_state
+
+        was_restrictive = (
+            self.red_hold_active
+            or self.stopped_for_tl_id == int(tracked_tl_id)
+            or previous_state in ("Red", "Yellow")
+            or self.last_tl_event
+            in (
+                "traffic_light_red_approach",
+                "traffic_light_red_stop",
+                "traffic_light_yellow_slow",
+                "traffic_light_yellow_stop",
+            )
+        )
+        if state == "Green" and was_restrictive:
+            return self._release_active_traffic_light_hold(
+                traffic_light,
+                ego_route_s_m,
+                now_monotonic,
+                previous_state=previous_state,
+            )
+        self.active_tl_id = int(tracked_tl_id)
+        self.active_tl_state = state
+        self.active_tl_last_seen_time = now_monotonic
+        return None
 
     def _traffic_light_locations(
         self,
@@ -838,12 +1103,36 @@ class RouteEventAnalyzer(Node):
 
     def _analyze(self) -> tuple[dict[str, Any], dict[str, Any]]:
         now = time.time()
+        self.green_release_triggered = False
+        self.red_hold_active_before = self.red_hold_active
+        self.red_hold_active_after = self.red_hold_active
+        self.stop_hold_cleared = False
+        self.release_reason = None
         route_age_s = now - self._last_route_time if self._last_route_time else None
         status_age_s = now - self._last_status_time if self._last_status_time else None
         debug = {
             "stamp": now,
             "route_age_s": route_age_s,
             "status_age_s": status_age_s,
+            "map": self._last_status.get("map") if isinstance(self._last_status, dict) else None,
+            "ego_id": self._last_status.get("ego_id") if isinstance(self._last_status, dict) else None,
+            "ego_location": (
+                self._last_status.get("location", {})
+                if isinstance(self._last_status, dict)
+                else {}
+            ),
+            "route_point_count": (
+                len(self._last_route.get("points", []))
+                if isinstance(self._last_route, dict)
+                else 0
+            ),
+            "nearest_route_index": None,
+            "total_actor_count": None,
+            "traffic_light_actor_count": None,
+            "traffic_lights": [],
+            "traffic_light_system_enabled": self.enable_traffic_light_events,
+            "traffic_light_system_reason": None,
+            "warning_payload": None,
             "actors_checked": 0,
             "actors_in_route_corridor": 0,
             "vehicles_checked": 0,
@@ -861,11 +1150,17 @@ class RouteEventAnalyzer(Node):
             ),
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "previous_tl_state": self.previous_tl_state,
             "active_stop_s": self.active_stop_s,
             "active_stop_route_index": self.active_stop_route_index,
             "active_stop_point_source": self.active_stop_point_source,
             "red_hold_active": self.red_hold_active,
             "stopped_for_tl_id": self.stopped_for_tl_id,
+            "green_release_triggered": self.green_release_triggered,
+            "red_hold_active_before": self.red_hold_active_before,
+            "red_hold_active_after": self.red_hold_active_after,
+            "stop_hold_cleared": self.stop_hold_cleared,
+            "release_reason": self.release_reason,
             "last_tl_event": self.last_tl_event,
         }
 
@@ -895,9 +1190,12 @@ class RouteEventAnalyzer(Node):
         )
         if ego_projection is None:
             return self._base_event(False, "ego_route_projection_failed"), debug
+        debug["nearest_route_index"] = int(ego_projection["route_index"])
 
         candidates: list[dict[str, Any]] = []
         world_actors = self._world.get_actors()
+        self._emit_startup_tl_diagnostics()
+        debug["total_actor_count"] = len(world_actors)
         actors = list(world_actors.filter("vehicle.*"))
         actors.extend(world_actors.filter("walker.pedestrian.*"))
 
@@ -1030,7 +1328,28 @@ class RouteEventAnalyzer(Node):
             ] = {}
             active_tl_seen = False
             ego_speed_mps = float(self._last_status.get("speed_mps", 0.0))
-            traffic_lights = world_actors.filter("traffic.traffic_light*")
+            traffic_lights = list(world_actors.filter("traffic.traffic_light*"))
+            debug["traffic_light_actor_count"] = len(traffic_lights)
+            debug["traffic_lights"] = [
+                self._traffic_light_snapshot(traffic_light)
+                for traffic_light in traffic_lights
+            ]
+            green_release_candidate = self._poll_active_traffic_light(
+                world_actors,
+                float(ego_projection["route_s_m"]),
+                now_monotonic,
+            )
+            if green_release_candidate is not None:
+                traffic_light_candidates.append(green_release_candidate)
+                active_tl_seen = True
+            if not traffic_lights:
+                debug["traffic_light_system_reason"] = "no_carla_traffic_light_actors"
+                debug["warning_payload"] = self._build_warning_payload(
+                    reason="no_carla_traffic_light_actors",
+                    map_name=debug["map"],
+                    ego_location=debug["ego_location"],
+                    traffic_light_actor_count=0,
+                )
             for traffic_light in traffic_lights:
                 debug["actors_checked"] += 1
                 debug["traffic_lights_checked"] += 1
@@ -1074,7 +1393,11 @@ class RouteEventAnalyzer(Node):
                     continue
                 if traffic_light_id == self.active_tl_id:
                     active_tl_seen = True
-                    self._set_active_gate(gate, state, now_monotonic)
+                    if state == "Green":
+                        self.active_tl_state = state
+                        self.active_tl_last_seen_time = now_monotonic
+                    else:
+                        self._set_active_gate(gate, state, now_monotonic)
 
                 candidate = None
                 if state == "Red":
@@ -1214,29 +1537,49 @@ class RouteEventAnalyzer(Node):
                         traffic_light_id == self.stopped_for_tl_id
                         or traffic_light_id == self.active_tl_id
                     )
-                    if same_held_light:
-                        self.red_hold_active = False
-                        self.stopped_for_tl_id = None
-                        self._set_active_gate(gate, state, now_monotonic)
+                    restrictive_memory_active = (
+                        self.red_hold_active
+                        or self.stopped_for_tl_id == traffic_light_id
+                        or self.last_tl_event
+                        in (
+                            "traffic_light_red_approach",
+                            "traffic_light_red_stop",
+                            "traffic_light_yellow_slow",
+                            "traffic_light_yellow_stop",
+                        )
+                    )
+                    if same_held_light and restrictive_memory_active:
+                        if not self.green_release_triggered:
+                            candidate = self._release_active_traffic_light_hold(
+                                traffic_light,
+                                float(ego_projection["route_s_m"]),
+                                now_monotonic,
+                            )
                         active_tl_seen = True
-                    if same_held_light or (
+                    if (
+                        same_held_light
+                        and restrictive_memory_active
+                    ) or (
                         last_restrictive is not None
                         and distance_to_stop_m <= self.green_release_distance_m
                     ):
                         self._green_release_until[traffic_light_id] = (
                             now_monotonic + self.green_release_grace_s
                         )
-                    if now_monotonic <= self._green_release_until.get(
+                    if (
+                        candidate is None
+                        and now_monotonic <= self._green_release_until.get(
                         traffic_light_id,
                         0.0,
+                        )
                     ):
                         candidate = self._candidate(
-                            "traffic_light_green_release",
+                            "traffic_light_green_clear",
                             traffic_light,
                             projection,
                             distance_to_stop_m,
                             0.0,
-                            "green_light_release",
+                            "active_light_green_release",
                             traffic_light_state=state,
                             stop_buffer_m=self.traffic_light_stop_buffer_m,
                             distance_to_light_m=distance_to_light_m,
@@ -1244,6 +1587,22 @@ class RouteEventAnalyzer(Node):
                             confidence=gate.confidence,
                             gate=gate,
                             distance_is_buffered=True,
+                        )
+                        candidate.update(
+                            self._green_release_details.get(
+                                traffic_light_id,
+                                {
+                                    "active_tl_id": traffic_light_id,
+                                    "active_tl_state": "Green",
+                                    "previous_tl_state": self.previous_tl_state,
+                                    "stopped_for_tl_id": None,
+                                    "green_release_triggered": False,
+                                    "red_hold_active_before": False,
+                                    "red_hold_active_after": False,
+                                    "stop_hold_cleared": False,
+                                    "release_reason": "active_light_green_release",
+                                },
+                            )
                         )
 
                 if candidate is not None:
@@ -1283,8 +1642,17 @@ class RouteEventAnalyzer(Node):
                         now_monotonic,
                     )
                     active_tl_seen = True
+                    if tracking_candidate["event"] in (
+                        "traffic_light_red_stop",
+                        "traffic_light_yellow_stop",
+                    ):
+                        self.stopped_for_tl_id = tracking_gate.light_id
                     if (
-                        tracking_state == "Red"
+                        tracking_candidate["event"]
+                        in (
+                            "traffic_light_red_stop",
+                            "traffic_light_yellow_stop",
+                        )
                         and tracking_gate.distance_to_stop_m
                         <= self.stopline_reached_distance_m
                         and ego_speed_mps <= self.stopped_speed_threshold_mps
@@ -1292,17 +1660,24 @@ class RouteEventAnalyzer(Node):
                     ):
                         self.red_hold_active = True
                         self.stopped_for_tl_id = tracking_gate.light_id
-                        tracking_candidate["event"] = "traffic_light_red_stop"
                         tracking_candidate["target_speed_limit_mps"] = 0.0
                         tracking_candidate["stop_required"] = True
-                        tracking_candidate["reason"] = "red_light_hold"
+                        tracking_candidate["reason"] = (
+                            "red_light_hold"
+                            if tracking_state == "Red"
+                            else "yellow_light_hold"
+                        )
 
-                self._last_restrictive_tl_candidate = dict(tracking_candidate)
-                self._last_restrictive_tl_time = now_monotonic
+                if restrictive_candidates:
+                    self._last_restrictive_tl_candidate = dict(
+                        tracking_candidate
+                    )
+                    self._last_restrictive_tl_time = now_monotonic
+                else:
+                    self._last_restrictive_tl_candidate = None
+                    self._last_restrictive_tl_time = 0.0
                 candidates.extend(traffic_light_candidates)
-                self.last_tl_event = str(
-                    self._last_restrictive_tl_candidate["event"]
-                )
+                self.last_tl_event = str(tracking_candidate["event"])
             elif (
                 self.red_hold_active
                 and self._last_restrictive_tl_candidate is not None
@@ -1331,20 +1706,33 @@ class RouteEventAnalyzer(Node):
                 ):
                     self._clear_active_gate()
                     self.last_tl_event = "clear"
+        else:
+            debug["traffic_light_system_reason"] = "traffic_light_events_disabled"
 
         debug["candidates"] = len(candidates)
         if not candidates:
-            return self._base_event(True, "route_corridor_clear"), debug
+            no_event_reason = (
+                "no_carla_traffic_light_actors"
+                if (
+                    self.enable_traffic_light_events
+                    and debug.get("traffic_light_actor_count") == 0
+                )
+                else "route_corridor_clear"
+            )
+            debug["event_decision"] = "none"
+            debug["no_event_reason"] = no_event_reason
+            return self._base_event(True, no_event_reason), debug
 
         priority = {
             "pedestrian_stop": 0,
             "traffic_light_red_stop": 1,
             "vehicle_stop": 2,
             "traffic_light_yellow_stop": 3,
-            "traffic_light_red_approach": 4,
-            "traffic_light_yellow_slow": 5,
-            "vehicle_follow": 6,
-            "traffic_light_green_release": 7,
+            "traffic_light_green_clear": 4,
+            "traffic_light_green_release": 4,
+            "traffic_light_red_approach": 5,
+            "traffic_light_yellow_slow": 6,
+            "vehicle_follow": 7,
             "clear": 8,
         }
         selected = min(
@@ -1359,6 +1747,8 @@ class RouteEventAnalyzer(Node):
         if str(payload["event"]).startswith("traffic_light_"):
             self.last_tl_event = str(payload["event"])
         debug.update({
+            "event_decision": payload["event"],
+            "no_event_reason": None,
             "selected_event": payload["event"],
             "selected_actor_id": payload["actor_id"],
             "selected_traffic_light_state": payload["traffic_light_state"],
@@ -1380,11 +1770,17 @@ class RouteEventAnalyzer(Node):
             "selected_reason": payload["reason"],
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "previous_tl_state": self.previous_tl_state,
             "active_stop_s": self.active_stop_s,
             "active_stop_route_index": self.active_stop_route_index,
             "active_stop_point_source": self.active_stop_point_source,
             "red_hold_active": self.red_hold_active,
             "stopped_for_tl_id": self.stopped_for_tl_id,
+            "green_release_triggered": self.green_release_triggered,
+            "red_hold_active_before": self.red_hold_active_before,
+            "red_hold_active_after": self.red_hold_active_after,
+            "stop_hold_cleared": self.stop_hold_cleared,
+            "release_reason": self.release_reason,
             "last_tl_event": self.last_tl_event,
         })
         return payload, debug
@@ -1406,6 +1802,7 @@ class RouteEventAnalyzer(Node):
                 f"RouteEventAnalyzer: analysis failed: {exc}",
             )
 
+        warning_payload = debug.pop("warning_payload", None)
         debug.update({
             "ok": payload["ok"],
             "event": payload["event"],
@@ -1438,15 +1835,48 @@ class RouteEventAnalyzer(Node):
             "selected_reason": payload["reason"],
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "previous_tl_state": self.previous_tl_state,
             "active_stop_s": self.active_stop_s,
             "active_stop_route_index": self.active_stop_route_index,
             "active_stop_point_source": self.active_stop_point_source,
             "red_hold_active": self.red_hold_active,
             "stopped_for_tl_id": self.stopped_for_tl_id,
+            "green_release_triggered": self.green_release_triggered,
+            "red_hold_active_before": self.red_hold_active_before,
+            "red_hold_active_after": self.red_hold_active_after,
+            "stop_hold_cleared": self.stop_hold_cleared,
+            "release_reason": self.release_reason,
             "last_tl_event": self.last_tl_event,
         })
+        if warning_payload is not None and time.monotonic() - self._last_warning_debug_publish >= 1.0:
+            self._last_warning_debug_publish = time.monotonic()
+            self.debug_pub.publish(String(data=json.dumps(warning_payload)))
+            self.runtime_logger.write({
+                "kind": "traffic_light_warning",
+                **warning_payload,
+            })
+            self._warn_throttled(
+                "no_traffic_light_actors",
+                "TL EVENTS ENABLED BUT NO traffic.traffic_light ACTORS FOUND IN CARLA WORLD. "
+                "RED LIGHT STOP CANNOT WORK ON THIS MAP.",
+                period_s=5.0,
+            )
+
+        if payload.get("reason") != self._last_debug_reason:
+            self._last_debug_reason = str(payload.get("reason"))
+            self.get_logger().info(
+                "RouteEventAnalyzer decision: "
+                f"event={payload.get('event')} reason={payload.get('reason')} "
+                f"traffic_light_actor_count={debug.get('traffic_light_actor_count')}"
+            )
+
         self.event_pub.publish(String(data=json.dumps(payload)))
         self.debug_pub.publish(String(data=json.dumps(debug)))
+        self.runtime_logger.write({
+            "kind": "route_event_tick",
+            "payload": payload,
+            "debug": debug,
+        })
 
 
 def main(args=None):

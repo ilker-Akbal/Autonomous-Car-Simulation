@@ -7,6 +7,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
+from teknofest_common.runtime_logging import RuntimeJsonlLogger
 from teknofest_planning.velocity_profile import (
     clamp,
     compute_target_speed_from_route,
@@ -69,6 +70,17 @@ class LaneFollower(Node):
         self.last_status_time = 0.0
         self.last_route_event_time = 0.0
         self.last_target_speed = 0.0
+        self._last_logged_route_event = None
+        self.runtime_logger = RuntimeJsonlLogger(
+            node_name="lane_follower",
+            file_name="lane_follower.jsonl",
+        )
+        self.runtime_logger.update_summary({
+            "lane_follower_log": self.runtime_logger.path(),
+        })
+        self.get_logger().info(
+            f"LaneFollower JSONL logging -> {self.runtime_logger.path()}"
+        )
 
         self.create_subscription(String, "/adas/planning/route", self._route_cb, 10)
         self.create_subscription(String, "/adas/carla/status", self._status_cb, 10)
@@ -122,6 +134,13 @@ class LaneFollower(Node):
 
         event = str(route_event.get("event", "clear"))
         speed_limit = route_event.get("target_speed_limit_mps")
+        if event in (
+            "clear",
+            "traffic_light_green_clear",
+            "traffic_light_green_release",
+        ):
+            return target_speed_mps, f"{speed_reason}+{event}"
+
         if event in (
             "vehicle_follow",
             "traffic_light_red_approach",
@@ -251,6 +270,7 @@ class LaneFollower(Node):
         )
 
         route_source = self.route.get("route_source", "unknown") if self.route else "unknown"
+        route_point_count = len(self.route.get("points", [])) if self.route else 0
         if not status_ok or not route_ok:
             plan = {
                 "stamp": now,
@@ -280,6 +300,13 @@ class LaneFollower(Node):
             msg = String()
             msg.data = json.dumps(plan)
             self.plan_pub.publish(msg)
+            self.runtime_logger.write({
+                "kind": "lane_plan",
+                "route_point_count": route_point_count,
+                "plan": plan,
+                "target_speed_before_route_events_mps": None,
+                "target_speed_after_route_events_mps": 0.0,
+            })
             return
 
         loc = self.ego.get("location", {})
@@ -318,6 +345,13 @@ class LaneFollower(Node):
                 "route_event_age_s": route_event_age_s,
             }
             msg = String(); msg.data = json.dumps(plan); self.plan_pub.publish(msg)
+            self.runtime_logger.write({
+                "kind": "lane_plan",
+                "route_point_count": route_point_count,
+                "plan": plan,
+                "target_speed_before_route_events_mps": None,
+                "target_speed_after_route_events_mps": 0.0,
+            })
             return
 
         nearest_index = self._find_nearest_index(points, ego_x, ego_y)
@@ -330,11 +364,18 @@ class LaneFollower(Node):
             moderate_turn_yaw_deg=self.moderate_turn_yaw_deg,
             sharp_turn_yaw_deg=self.sharp_turn_yaw_deg,
         )
+        target_speed_before_route_events = float(profile["target_speed_mps"])
 
         target_speed, speed_reason = self._apply_route_event_speed_limit(
-            float(profile["target_speed_mps"]),
+            target_speed_before_route_events,
             str(profile["speed_reason"]),
             active_route_event,
+        )
+        target_speed_after_route_events = float(target_speed)
+        green_release_active = route_event_name in (
+            "clear",
+            "traffic_light_green_clear",
+            "traffic_light_green_release",
         )
         force_event_stop = (
             active_route_event is not None
@@ -357,6 +398,11 @@ class LaneFollower(Node):
                 self.last_target_speed + clamp(speed_error, -max_delta, max_delta),
                 0.0,
                 self.max_speed_mps,
+            )
+        if green_release_active and target_speed_after_route_events > 0.0:
+            self.last_target_speed = max(
+                self.last_target_speed,
+                min(target_speed_after_route_events, max_delta),
             )
 
         lookahead_m = self.base_lookahead_m
@@ -488,14 +534,25 @@ class LaneFollower(Node):
         msg = String()
         msg.data = json.dumps(plan)
         self.plan_pub.publish(msg)
+        if route_event_name != self._last_logged_route_event:
+            self._last_logged_route_event = route_event_name
+            self.get_logger().info(
+                "LaneFollower route event update: "
+                f"event={route_event_name} reason={route_event_reason} "
+                f"target_speed_before={round(target_speed_before_route_events, 3)} "
+                f"target_speed_after={round(target_speed_after_route_events, 3)} "
+                f"target_speed_final={round(self.last_target_speed, 3)}"
+            )
 
         dbg = String()
-        dbg.data = json.dumps({
+        debug_payload = {
             "stamp": now,
             "local_x": local_x,
             "local_y": local_y,
             "steer": steer_norm,
             "cruise_speed_mps": self.cruise_speed_mps,
+            "target_speed_before_route_events_mps": round(target_speed_before_route_events, 3),
+            "target_speed_after_route_events_mps": round(target_speed_after_route_events, 3),
             "target_speed_mps": self.last_target_speed,
             "turn_intensity": profile["turn_intensity"],
             "speed_reason": speed_reason,
@@ -512,8 +569,18 @@ class LaneFollower(Node):
             "tl_target_clamped": tl_target_clamped,
             "tl_stop_s": tl_stop_s,
             "tl_distance_to_stop_m": route_event_distance_to_stop_m,
-        })
+        }
+        dbg.data = json.dumps(debug_payload)
         self.debug_pub.publish(dbg)
+        self.runtime_logger.write({
+            "kind": "lane_plan",
+            "route_point_count": route_point_count,
+            "nearest_route_index": nearest_index,
+            "target_speed_before_route_events_mps": round(target_speed_before_route_events, 3),
+            "target_speed_after_route_events_mps": round(target_speed_after_route_events, 3),
+            "plan": plan,
+            "debug": debug_payload,
+        })
 
 
 def main(args=None):

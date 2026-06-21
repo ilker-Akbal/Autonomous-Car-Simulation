@@ -1,8 +1,9 @@
 import os
+from datetime import datetime
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction, LogInfo
+from launch.actions import DeclareLaunchArgument, TimerAction, LogInfo, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.actions import Node
@@ -11,6 +12,8 @@ from launch.conditions import IfCondition
 
 def generate_launch_description():
     package_root = Path(__file__).resolve().parent.parent
+    log_session_id = f"phase2_drive_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    log_root = package_root / "outputs" / "teknofest_sim_logs"
     default_mission_geojson = package_root / "missions" / "teknofest_town03_competition_v4_tasks_only.geojson"
     if not default_mission_geojson.exists():
         default_mission_geojson = package_root / "missions" / "teknofest_round3.geojson"
@@ -210,8 +213,11 @@ def generate_launch_description():
         DeclareLaunchArgument("loop_mission", default_value="false"),
         DeclareLaunchArgument("mission_publish_rate_hz", default_value="2.0"),
         DeclareLaunchArgument("min_route_points", default_value="8"),
+        SetEnvironmentVariable("TEKNOFEST_LOG_SESSION", log_session_id),
+        SetEnvironmentVariable("TEKNOFEST_LOG_ROOT", str(log_root)),
 
         LogInfo(msg="Starting Phase 2 minimal drive stack"),
+        LogInfo(msg=f"Phase 2 debug session: {log_root / log_session_id}"),
 
         # Start Phase 1 nodes (embedded here to ensure proper ordering)
         Node(

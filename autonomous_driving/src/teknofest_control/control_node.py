@@ -5,6 +5,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
+from teknofest_common.runtime_logging import RuntimeJsonlLogger
+
 
 def _clamp(v, a, b):
     return max(a, min(b, v))
@@ -52,6 +54,17 @@ class ControlNode(Node):
         self.last_steer = 0.0
         self.stop_hold_active = False
         self.stop_hold_reason = None
+        self._last_logged_event_stop_reason = None
+        self.runtime_logger = RuntimeJsonlLogger(
+            node_name="control_node",
+            file_name="control_node.jsonl",
+        )
+        self.runtime_logger.update_summary({
+            "control_node_log": self.runtime_logger.path(),
+        })
+        self.get_logger().info(
+            f"ControlNode JSONL logging -> {self.runtime_logger.path()}"
+        )
 
         self.create_subscription(String, "/adas/planning/lane_plan", self._plan_cb, 10)
         self.create_subscription(String, "/adas/carla/status", self._status_cb, 10)
@@ -125,9 +138,22 @@ class ControlNode(Node):
             ):
                 target_speed = 0.0
 
+        green_release_event = route_event in (
+            "traffic_light_green_clear",
+            "traffic_light_green_release",
+        )
+        release_event = route_event in (
+            "clear",
+            "traffic_light_green_clear",
+            "traffic_light_green_release",
+        )
         release_stop_hold = (
-            route_event in ("clear", "traffic_light_green_release")
-            and target_speed > 0.3
+            release_event
+            and plan_ok
+            and bool(self.last_plan.get("route_ok", False))
+            and bool(self.last_plan.get("status_ok", False))
+            and target_speed > 0.0
+            and (self.stop_hold_active or green_release_event)
         )
         if release_stop_hold:
             self.stop_hold_active = False
@@ -209,11 +235,19 @@ class ControlNode(Node):
                 )
 
             if release_stop_hold:
+                self.stop_hold_active = False
+                self.stop_hold_reason = None
                 stop_hold = False
                 stop_hold_reason = None
                 event_stop = False
                 event_stop_reason = None
                 brake = 0.0
+                if target_speed > current_speed:
+                    throttle = _clamp(
+                        max(throttle, raw_throttle, 0.01),
+                        0.0,
+                        self.max_throttle,
+                    )
 
             delta = throttle - self.last_throttle
             delta = _clamp(delta, -self.throttle_slew_limit, self.throttle_slew_limit)
@@ -255,8 +289,7 @@ class ControlNode(Node):
         m.data = json.dumps(cmd)
         self.cmd_pub.publish(m)
 
-        dbg = String()
-        dbg.data = json.dumps({
+        debug_payload = {
             "target_speed_mps": target_speed,
             "current_speed_mps": current_speed,
             "speed_error": round(target_speed - current_speed, 3),
@@ -272,8 +305,29 @@ class ControlNode(Node):
             "stop_hold_reason": stop_hold_reason,
             "route_event": route_event,
             "route_event_distance_m": route_event_distance_m,
-        })
+        }
+        dbg = String()
+        dbg.data = json.dumps(debug_payload)
         self.debug_pub.publish(dbg)
+        if event_stop_reason != self._last_logged_event_stop_reason:
+            self._last_logged_event_stop_reason = event_stop_reason
+            self.get_logger().info(
+                "ControlNode command update: "
+                f"route_event={route_event} target_speed={round(target_speed, 3)} "
+                f"throttle={cmd['throttle']} brake={cmd['brake']} steer={cmd['steer']} "
+                f"event_stop_reason={event_stop_reason}"
+            )
+        self.runtime_logger.write({
+            "kind": "vehicle_command",
+            "command": cmd,
+            "debug": debug_payload,
+            "target_speed_before_control_mps": round(target_speed, 3),
+            "final_vehicle_command": {
+                "throttle": cmd["throttle"],
+                "brake": cmd["brake"],
+                "steer": cmd["steer"],
+            },
+        })
 
 
 def main(args=None):
