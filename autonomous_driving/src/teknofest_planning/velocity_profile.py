@@ -163,10 +163,12 @@ def compute_target_speed_from_route(
 
     speed_limit = route_speed_limit_mps(points, nearest_index)
     speed_limit_clamped = False
-    if speed_limit is not None and speed > speed_limit:
-        speed = max(0.0, speed_limit)
+    if speed_limit is not None and speed_limit > 0.0 and speed > speed_limit:
+        speed = float(speed_limit)
         speed_limit_clamped = True
         clamp_reason = "speed_limit"
+    elif speed_limit is not None and speed_limit <= 0.0:
+        clamp_reason = "ignored_nonpositive_speed_limit"
 
     clamped_speed = clamp(speed, 0.0, max_speed_mps)
     if clamped_speed < speed and clamp_reason is None:

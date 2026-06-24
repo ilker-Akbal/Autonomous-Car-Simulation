@@ -116,7 +116,10 @@ class RouteSampler(Node):
             route_ok = bool(
                 self._last_global_route.get("ok", self._last_global_route.get("route_ok", False))
             )
-            if route_ok and len(points) > 0:
+            route_safety_validated = bool(
+                self._last_global_route.get("route_safety_validated", False)
+            )
+            if route_ok and route_safety_validated and len(points) > 0:
                 self._last_valid_global_route = copy.deepcopy(self._last_global_route)
                 self._last_valid_global_route_time = self._last_route_time
         except Exception:
@@ -295,11 +298,17 @@ class RouteSampler(Node):
                     "yaw": round(previous.transform.rotation.yaw, 3),
                     "road_id": previous.road_id,
                     "lane_id": previous.lane_id,
+                    "route_lane_id": previous.lane_id,
+                    "requested_right_lane_id": None,
                     "selected_road_id": previous.road_id,
                     "selected_lane_id": previous.lane_id,
                     "lane_preference": "right",
                     "right_lane_selected": False,
                     "right_lane_reason": "fallback_forward_route",
+                    "right_lane_projection_status": "fallback_forward_route",
+                    "right_lane_projection_rejected_reason": "fallback_forward_route",
+                    "right_lane_fallback_used": False,
+                    "fallback_kept_right_lane": False,
                     "selected_lane_lateral_right_m": 0.0,
                     "candidate_lane_ids": [previous.lane_id],
                     "candidate_lane_lateral_right_m": [0.0],
@@ -329,6 +338,8 @@ class RouteSampler(Node):
             "right_lane_policy_enabled": False,
             "right_lane_projection_failed_reason": "fallback_forward_route",
             "route_continuity_ok": True,
+            "route_safety_validated": True,
+            "route_safety_reject_reason": None,
             "sign_constraints_enabled": False,
             "sign_constraints_loaded": False,
             "sign_constraints_count": 0,
@@ -393,6 +404,8 @@ class RouteSampler(Node):
             "right_lane_policy_enabled": False,
             "right_lane_projection_failed_reason": source,
             "route_continuity_ok": False,
+            "route_safety_validated": False,
+            "route_safety_reject_reason": source,
             "sign_constraints_enabled": False,
             "sign_constraints_loaded": False,
             "sign_constraints_count": 0,
@@ -413,6 +426,8 @@ class RouteSampler(Node):
             route_ok = bool(route.get("ok", route.get("route_ok", False)))
             if not route_ok:
                 return "global_route_invalid"
+            if not bool(route.get("route_safety_validated", False)):
+                return "global_route_safety_invalid"
         reason = str(route.get("replan_reason") or "")
         if "mission" in reason or route.get("goal_name") is None:
             return "mission_missing"
@@ -431,7 +446,11 @@ class RouteSampler(Node):
 
     def _route_is_valid(self, payload: dict[str, Any]) -> bool:
         points = payload.get("points", [])
-        return bool(payload.get("route_ok")) and len(points) >= self.min_route_points
+        return (
+            bool(payload.get("route_ok"))
+            and bool(payload.get("route_safety_validated", True))
+            and len(points) >= self.min_route_points
+        )
 
     def _remember_valid_route(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._last_valid_local_route = copy.deepcopy(payload)
@@ -466,6 +485,7 @@ class RouteSampler(Node):
         global_route_ok = bool(
             isinstance(route, dict)
             and route.get("ok", route.get("route_ok", False))
+            and route.get("route_safety_validated", False)
             and points
         )
 
@@ -538,6 +558,7 @@ class RouteSampler(Node):
         global_route_cache_age_s = route.get("global_route_cache_age_s")
         global_route_cache_valid = bool(route.get("global_route_cache_valid", False))
         last_global_route_age_s = time.time() - self._last_route_time if self._last_route_time else None
+        first_local_point = local_points[0] if local_points else {}
 
         payload = {
             "stamp": time.time(),
@@ -576,6 +597,21 @@ class RouteSampler(Node):
             "last_global_route_len": len(points),
             "held_last_route": False,
             "right_lane_policy_enabled": route.get("right_lane_policy_enabled", False),
+            "lane_preference": first_local_point.get("lane_preference", "right"),
+            "route_lane_id": first_local_point.get("route_lane_id", first_local_point.get("lane_id")),
+            "requested_right_lane_id": first_local_point.get("requested_right_lane_id"),
+            "selected_lane_id": first_local_point.get("selected_lane_id", first_local_point.get("lane_id")),
+            "selected_road_id": first_local_point.get("selected_road_id", first_local_point.get("road_id")),
+            "right_lane_reason": first_local_point.get("right_lane_reason"),
+            "right_lane_projection_status": first_local_point.get("right_lane_projection_status"),
+            "right_lane_projection_rejected_reason": first_local_point.get(
+                "right_lane_projection_rejected_reason",
+                first_local_point.get("right_lane_projection_failed_reason"),
+            ),
+            "right_lane_fallback_used": bool(first_local_point.get("right_lane_fallback_used", False)),
+            "fallback_kept_right_lane": bool(first_local_point.get("fallback_kept_right_lane", False)),
+            "target_source": first_local_point.get("target_source"),
+            "lane_jump_disabled": bool(first_local_point.get("lane_jump_disabled", True)),
             "right_lane_projection_count": route.get("right_lane_projection_count", 0),
             "right_lane_projection_failed_count": route.get("right_lane_projection_failed_count", 0),
             "right_lane_projection_partial_fallback_count": route.get("right_lane_projection_partial_fallback_count", 0),
@@ -584,6 +620,9 @@ class RouteSampler(Node):
             "right_lane_projection_failed_reason": route.get("right_lane_projection_failed_reason"),
             "route_continuity_ok": route.get("route_continuity_ok", False),
             "right_lane_route_continuity_ok": route.get("right_lane_route_continuity_ok", route.get("route_continuity_ok", False)),
+            "route_safety_validated": route.get("route_safety_validated", False),
+            "route_safety_reject_reason": route.get("route_safety_reject_reason"),
+            "final_route_source": route.get("final_route_source"),
             "sign_constraints_enabled": route.get("sign_constraints_enabled", False),
             "sign_constraints_loaded": route.get("sign_constraints_loaded", False),
             "sign_constraints_count": route.get("sign_constraints_count", 0),
@@ -658,6 +697,18 @@ class RouteSampler(Node):
             "disable_fallback_driving": self.disable_fallback_driving,
             "disable_fallback_driving_when_mission_missing": self.disable_fallback_driving_when_mission_missing,
             "right_lane_policy_enabled": route_payload.get("right_lane_policy_enabled", False),
+            "lane_preference": route_payload.get("lane_preference", "right"),
+            "route_lane_id": route_payload.get("route_lane_id"),
+            "requested_right_lane_id": route_payload.get("requested_right_lane_id"),
+            "selected_lane_id": route_payload.get("selected_lane_id"),
+            "selected_road_id": route_payload.get("selected_road_id"),
+            "right_lane_reason": route_payload.get("right_lane_reason"),
+            "right_lane_projection_status": route_payload.get("right_lane_projection_status"),
+            "right_lane_projection_rejected_reason": route_payload.get("right_lane_projection_rejected_reason"),
+            "right_lane_fallback_used": route_payload.get("right_lane_fallback_used", False),
+            "fallback_kept_right_lane": route_payload.get("fallback_kept_right_lane", False),
+            "target_source": route_payload.get("target_source"),
+            "lane_jump_disabled": route_payload.get("lane_jump_disabled", True),
             "right_lane_projection_count": route_payload.get("right_lane_projection_count", 0),
             "right_lane_projection_failed_count": route_payload.get("right_lane_projection_failed_count", 0),
             "right_lane_projection_partial_fallback_count": route_payload.get("right_lane_projection_partial_fallback_count", 0),
@@ -666,6 +717,9 @@ class RouteSampler(Node):
             "right_lane_projection_failed_reason": route_payload.get("right_lane_projection_failed_reason"),
             "route_continuity_ok": route_payload.get("route_continuity_ok", False),
             "right_lane_route_continuity_ok": route_payload.get("right_lane_route_continuity_ok", False),
+            "route_safety_validated": route_payload.get("route_safety_validated", False),
+            "route_safety_reject_reason": route_payload.get("route_safety_reject_reason"),
+            "final_route_source": route_payload.get("final_route_source"),
             "sign_constraints_enabled": route_payload.get("sign_constraints_enabled", False),
             "sign_constraints_loaded": route_payload.get("sign_constraints_loaded", False),
             "sign_constraints_count": route_payload.get("sign_constraints_count", 0),

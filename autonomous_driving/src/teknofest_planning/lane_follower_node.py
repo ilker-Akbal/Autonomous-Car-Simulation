@@ -57,6 +57,9 @@ class LaneFollower(Node):
         self.declare_parameter("steering_rate_limit_enabled", True)
         self.declare_parameter("max_steer_delta", 0.08)
         self.declare_parameter("min_nonzero_target_speed_mps", 1.2)
+        self.declare_parameter("nominal_min_speed_mps", 1.2)
+        self.declare_parameter("junction_recovery_min_speed_mps", 1.0)
+        self.declare_parameter("junction_exit_min_speed_mps", 1.0)
         self.declare_parameter("task_pull_over_start_distance_m", 18.0)
         self.declare_parameter("task_pull_over_final_distance_m", 5.0)
         self.declare_parameter("task_pull_over_lateral_offset_m", 1.0)
@@ -129,6 +132,15 @@ class LaneFollower(Node):
         self.max_steer_delta = float(self.get_parameter("max_steer_delta").value)
         self.min_nonzero_target_speed_mps = float(
             self.get_parameter("min_nonzero_target_speed_mps").value
+        )
+        self.nominal_min_speed_mps = float(
+            self.get_parameter("nominal_min_speed_mps").value
+        )
+        self.junction_recovery_min_speed_mps = float(
+            self.get_parameter("junction_recovery_min_speed_mps").value
+        )
+        self.junction_exit_min_speed_mps = float(
+            self.get_parameter("junction_exit_min_speed_mps").value
         )
         self.task_pull_over_start_distance_m = float(
             self.get_parameter("task_pull_over_start_distance_m").value
@@ -238,10 +250,16 @@ class LaneFollower(Node):
             "route_locked": True,
             "lane_assist_only": self.lane_assist_only,
             "lane_preference": "right",
+            "route_lane_id": None,
+            "requested_right_lane_id": None,
             "selected_lane_id": None,
             "selected_road_id": None,
             "right_lane_selected": False,
             "right_lane_reason": None,
+            "right_lane_projection_status": None,
+            "right_lane_projection_rejected_reason": None,
+            "right_lane_fallback_used": False,
+            "fallback_kept_right_lane": False,
             "lane_jump_disabled": True,
             "selected_lane_lateral_right_m": None,
             "candidate_lane_ids": [],
@@ -272,7 +290,17 @@ class LaneFollower(Node):
             "lane_departure_speed_clamp_applied": False,
             "min_nonzero_speed_floor_applied": False,
             "min_nonzero_target_speed_mps": self.min_nonzero_target_speed_mps,
+            "min_speed_floor_applied": False,
+            "min_speed_floor_reason": None,
+            "nominal_min_speed_mps": self.nominal_min_speed_mps,
+            "junction_recovery_min_speed_mps": self.junction_recovery_min_speed_mps,
+            "junction_exit_min_speed_mps": self.junction_exit_min_speed_mps,
             "route_conflict_with_lane_detection": False,
+            "target_speed_raw_mps": None,
+            "target_speed_final_mps": None,
+            "zero_speed_reason": None,
+            "junction_locked": False,
+            "junction_exit_recovery_active": False,
             "selected_route_index": None,
             "lookahead_distance_m": self.base_lookahead_m,
             "steering_limited": False,
@@ -538,6 +566,81 @@ class LaneFollower(Node):
             f"{speed_reason}+{event}",
         )
 
+    @staticmethod
+    def _red_approach_speed_cap(distance_to_stop_m: Optional[float]) -> Optional[float]:
+        if distance_to_stop_m is None:
+            return None
+        distance = max(0.0, float(distance_to_stop_m))
+        if distance <= 4.0:
+            return 0.0
+        if distance <= 8.0:
+            return 0.8
+        if distance <= 15.0:
+            return 1.2
+        if distance <= 25.0:
+            return 1.8
+        if distance <= 35.0:
+            return 2.5
+        return 3.0
+
+    @staticmethod
+    def _event_zero_speed_reason(
+        route_event_name: str,
+        route_event: Optional[dict[str, Any]],
+    ) -> Optional[str]:
+        if route_event is None:
+            return None
+
+        if route_event_name in ("emergency_stop", "collision_stop"):
+            return route_event_name
+
+        if route_event_name in (
+            "traffic_light_red_stop",
+            "traffic_light_red_approach",
+            "traffic_light_yellow_stop",
+            "traffic_light_yellow_slow",
+        ):
+            speed_limit = route_event.get("target_speed_limit_mps")
+            if bool(route_event.get("stop_required", False)):
+                return route_event_name
+            if speed_limit is not None:
+                try:
+                    if float(speed_limit) <= 0.0:
+                        return route_event_name
+                except Exception:
+                    pass
+
+        if route_event_name in ("vehicle_stop", "pedestrian_stop"):
+            return route_event_name
+
+        return None
+
+    def _minimum_drive_speed(
+        self,
+        speed_context: str,
+        junction_locked: bool,
+        route_recovery_active: bool,
+    ) -> float:
+        if junction_locked or route_recovery_active:
+            return min(self.max_speed_mps, max(0.0, self.junction_exit_min_speed_mps))
+        if speed_context == "nominal":
+            return min(self.max_speed_mps, max(0.0, self.nominal_min_speed_mps))
+        return 0.0
+
+    @staticmethod
+    def _minimum_drive_speed_reason(
+        speed_context: str,
+        junction_exit_recovery_active: bool,
+        route_recovery_active: bool,
+    ) -> Optional[str]:
+        if junction_exit_recovery_active:
+            return "junction_exit_min_speed"
+        if route_recovery_active:
+            return "route_recovery_min_speed"
+        if speed_context == "nominal":
+            return "nominal_min_speed"
+        return None
+
     def _find_nearest_index(self, points: list[dict[str, Any]], ego_x: float, ego_y: float) -> int:
         nearest_index = 0
         nearest_dist = float("inf")
@@ -767,10 +870,30 @@ class LaneFollower(Node):
             if active_route_event is not None
             else None
         )
+        route_event_front_bumper_to_stopline_m = (
+            active_route_event.get("front_bumper_to_stopline_m")
+            if active_route_event is not None
+            else None
+        )
+        traffic_light_distance_m = (
+            route_event_front_bumper_to_stopline_m
+            if route_event_front_bumper_to_stopline_m is not None
+            else route_event_distance_to_stop_m
+        )
         route_event_speed_limit_mps = (
             active_route_event.get("target_speed_limit_mps")
             if active_route_event is not None
             else None
+        )
+        red_stop_trigger_m = (
+            active_route_event.get("red_stop_trigger_m")
+            if active_route_event is not None
+            else None
+        )
+        red_stop_triggered_by_distance = bool(
+            active_route_event.get("red_stop_triggered_by_distance", False)
+            if active_route_event is not None
+            else False
         )
         route_event_traffic_light_state = (
             active_route_event.get("traffic_light_state")
@@ -839,6 +962,9 @@ class LaneFollower(Node):
             route_only_debug["mission_stop_active"] = mission_stop_active
             route_only_debug["mission_stop_reason"] = mission_stop_reason
             route_only_debug["route_target_recovery_active"] = route_target_recovery_active
+            route_only_debug["target_speed_raw_mps"] = 0.0
+            route_only_debug["target_speed_final_mps"] = 0.0
+            route_only_debug["zero_speed_reason"] = f"route_invalid:{route_source}"
             plan = {
                 "stamp": now,
                 "source": "phase2b_pure_pursuit",
@@ -903,6 +1029,9 @@ class LaneFollower(Node):
             route_only_debug["mission_stop_active"] = mission_stop_active
             route_only_debug["mission_stop_reason"] = mission_stop_reason
             route_only_debug["route_target_recovery_active"] = route_target_recovery_active
+            route_only_debug["target_speed_raw_mps"] = 0.0
+            route_only_debug["target_speed_final_mps"] = 0.0
+            route_only_debug["zero_speed_reason"] = f"route_invalid:{route_source}"
             plan = {
                 "stamp": now,
                 "source": "phase2b_pure_pursuit",
@@ -978,6 +1107,14 @@ class LaneFollower(Node):
             str(profile["speed_reason"]),
             active_route_event,
         )
+        red_approach_speed_cap_mps = None
+        if route_event_name == "traffic_light_red_approach":
+            red_approach_speed_cap_mps = self._red_approach_speed_cap(
+                traffic_light_distance_m
+            )
+            if red_approach_speed_cap_mps is not None:
+                target_speed = min(target_speed, red_approach_speed_cap_mps)
+                speed_reason = f"{speed_reason}+red_approach_distance_cap"
         target_speed_after_route_events = float(target_speed)
         if mission_stop_active:
             target_speed = 0.0
@@ -996,6 +1133,10 @@ class LaneFollower(Node):
             )
             and route_event_stop_required
         )
+        route_event_zero_reason = self._event_zero_speed_reason(
+            route_event_name,
+            active_route_event,
+        )
         speed_error = target_speed - self.last_target_speed
         if speed_error > 0:
             max_delta = self.speed_slew_up_mps_per_s / max(1.0, self.rate_hz)
@@ -1010,6 +1151,11 @@ class LaneFollower(Node):
                 0.0,
                 self.max_speed_mps,
             )
+        if (
+            route_event_name == "traffic_light_red_approach"
+            and red_approach_speed_cap_mps is not None
+        ):
+            self.last_target_speed = min(self.last_target_speed, red_approach_speed_cap_mps)
         if green_release_active and target_speed_after_route_events > 0.0:
             self.last_target_speed = max(
                 self.last_target_speed,
@@ -1173,15 +1319,22 @@ class LaneFollower(Node):
             target_source = "mission_task_stop"
         elif bool(target.get("is_junction", False)) or turn_direction in ("left", "right", "u_turn"):
             target_source = "junction_route"
-        elif bool(target.get("lane_jump_disabled", False)):
-            target_source = "route_lane_center"
         elif bool(target.get("right_lane_selected", False)):
             target_source = "right_lane_route"
+        elif bool(target.get("lane_jump_disabled", False)):
+            target_source = "route_lane_center"
         else:
             target_source = "fallback_lane"
 
         route_only_debug["target_source"] = target_source
+        junction_locked = (
+            target_source == "junction_route"
+            or target.get("right_lane_reason") == "junction_route_lane_center_locked"
+        )
+        route_only_debug["junction_locked"] = junction_locked
         route_only_debug["lane_preference"] = str(target.get("lane_preference", "right"))
+        route_only_debug["route_lane_id"] = target.get("route_lane_id", target.get("lane_id"))
+        route_only_debug["requested_right_lane_id"] = target.get("requested_right_lane_id")
         route_only_debug["selected_lane_id"] = target.get(
             "selected_lane_id",
             target.get("lane_id"),
@@ -1194,6 +1347,19 @@ class LaneFollower(Node):
         route_only_debug["right_lane_reason"] = target.get(
             "right_lane_reason",
             target.get("right_lane_projection_failed_reason"),
+        )
+        route_only_debug["right_lane_projection_status"] = target.get(
+            "right_lane_projection_status"
+        )
+        route_only_debug["right_lane_projection_rejected_reason"] = target.get(
+            "right_lane_projection_rejected_reason",
+            target.get("right_lane_projection_failed_reason"),
+        )
+        route_only_debug["right_lane_fallback_used"] = bool(
+            target.get("right_lane_fallback_used", False)
+        )
+        route_only_debug["fallback_kept_right_lane"] = bool(
+            target.get("fallback_kept_right_lane", False)
         )
         route_only_debug["lane_jump_disabled"] = bool(
             target.get("lane_jump_disabled", True)
@@ -1270,9 +1436,109 @@ class LaneFollower(Node):
             self.last_target_speed = clamped_speed
             if lane_departure_speed_clamp_applied:
                 final_clamp_reason = "lane_departure"
+        zero_speed_reason = None
+        task_hold_active = bool(task_debug.get("task_hold_active", False))
+        task_stop_reached = bool(task_debug.get("task_stop_reached", False))
+        task_reached_by_mission = bool(task_debug.get("task_stop_reached_by_mission", False))
+        if mission_stop_active:
+            zero_speed_reason = mission_stop_reason or "mission_stop"
+        elif task_hold_active:
+            zero_speed_reason = str(task_debug.get("task_pose_phase") or "task_hold")
+        elif task_stop_reached or task_reached_by_mission:
+            zero_speed_reason = "task_stop_reached"
+        elif route_event_zero_reason is not None:
+            zero_speed_reason = route_event_zero_reason
+
+        route_recovery_active = (
+            bool(route_only_debug.get("route_recovery_active", False))
+            or bool(route_only_debug.get("route_target_recovery_active", False))
+        )
+        junction_exit_recovery_active = (
+            junction_locked
+            and zero_speed_reason is None
+            and route_event_name in (
+                "clear",
+                "traffic_light_green_clear",
+                "traffic_light_green_release",
+            )
+        )
+        min_drive_speed = self._minimum_drive_speed(
+            str(profile.get("speed_context", "nominal")),
+            junction_exit_recovery_active,
+            route_recovery_active,
+        )
+        min_speed_floor_reason = self._minimum_drive_speed_reason(
+            str(profile.get("speed_context", "nominal")),
+            junction_exit_recovery_active,
+            route_recovery_active,
+        )
+        min_speed_floor_applied = False
+        min_speed_floor_skipped_reason = None
+        red_light_speed_cap_active = route_event_name in (
+            "traffic_light_red_approach",
+            "traffic_light_red_stop",
+        )
+        if (
+            zero_speed_reason is None
+            and not red_light_speed_cap_active
+            and min_drive_speed > 0.0
+            and self.last_target_speed < min_drive_speed
+        ):
+            before_floor_speed = self.last_target_speed
+            self.last_target_speed = max(
+                self.last_target_speed,
+                min_drive_speed,
+            )
+            self.last_target_speed = clamp(self.last_target_speed, 0.0, self.max_speed_mps)
+            min_speed_floor_applied = self.last_target_speed > before_floor_speed
+            min_nonzero_speed_floor_applied = (
+                min_nonzero_speed_floor_applied
+                or min_speed_floor_applied
+            )
+        elif red_light_speed_cap_active:
+            min_speed_floor_skipped_reason = "traffic_light_red_cap_active"
+        if self.last_target_speed > 1e-3:
+            zero_speed_reason = None
         route_only_debug["lane_departure_speed_clamp_applied"] = lane_departure_speed_clamp_applied
         route_only_debug["min_nonzero_speed_floor_applied"] = min_nonzero_speed_floor_applied
         route_only_debug["min_nonzero_target_speed_mps"] = self.min_nonzero_target_speed_mps
+        route_only_debug["min_speed_floor_applied"] = min_speed_floor_applied
+        route_only_debug["min_speed_floor_reason"] = (
+            min_speed_floor_reason if min_speed_floor_applied else None
+        )
+        route_only_debug["min_speed_floor_skipped_reason"] = min_speed_floor_skipped_reason
+        route_only_debug["nominal_min_speed_mps"] = self.nominal_min_speed_mps
+        route_only_debug["junction_recovery_min_speed_mps"] = self.junction_recovery_min_speed_mps
+        route_only_debug["junction_exit_min_speed_mps"] = self.junction_exit_min_speed_mps
+        route_only_debug["junction_exit_recovery_active"] = junction_exit_recovery_active
+        route_only_debug["target_speed_raw_mps"] = round(target_speed_before_route_events, 3)
+        route_only_debug["target_speed_final_mps"] = round(self.last_target_speed, 3)
+        route_only_debug["zero_speed_reason"] = zero_speed_reason
+        route_only_debug["current_speed_mps"] = round(speed, 3)
+        route_only_debug["traffic_light_distance_m"] = (
+            round(float(traffic_light_distance_m), 3)
+            if traffic_light_distance_m is not None
+            else None
+        )
+        route_only_debug["front_bumper_to_stopline_m"] = (
+            round(float(route_event_front_bumper_to_stopline_m), 3)
+            if route_event_front_bumper_to_stopline_m is not None
+            else None
+        )
+        route_only_debug["red_approach_speed_cap_mps"] = (
+            round(float(red_approach_speed_cap_mps), 3)
+            if red_approach_speed_cap_mps is not None
+            else None
+        )
+        route_only_debug["red_approach_profile_mode"] = (
+            "soft" if red_approach_speed_cap_mps is not None else None
+        )
+        route_only_debug["red_stop_trigger_m"] = (
+            round(float(red_stop_trigger_m), 3)
+            if red_stop_trigger_m is not None
+            else None
+        )
+        route_only_debug["red_stop_triggered_by_distance"] = red_stop_triggered_by_distance
         route_only_debug["selected_route_index"] = selected_target_index
         route_only_debug["lookahead_distance_m"] = round(lookahead_m, 3)
         route_only_debug["steering_limited"] = abs(raw_steer_norm) >= 1.0
