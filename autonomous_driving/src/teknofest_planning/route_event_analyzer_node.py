@@ -35,6 +35,19 @@ class TrafficLightStopGate:
     road_lane_match: Optional[bool]
     fence_intersection_found: bool
     projection: dict[str, float | int]
+    center_to_stopline_m: Optional[float] = None
+    front_bumper_to_stopline_m: Optional[float] = None
+    ego_center_x: Optional[float] = None
+    ego_center_y: Optional[float] = None
+    ego_front_x: Optional[float] = None
+    ego_front_y: Optional[float] = None
+    applied_stop_line_buffer_m: Optional[float] = None
+    stop_anchor_forward_offset_m: Optional[float] = None
+    stopline_road_id: Optional[int] = None
+    stopline_lane_id: Optional[int] = None
+    ego_road_id: Optional[int] = None
+    ego_lane_id: Optional[int] = None
+    same_lane_or_compatible: Optional[bool] = None
 
 
 class RouteEventAnalyzer(Node):
@@ -68,6 +81,13 @@ class RouteEventAnalyzer(Node):
         self.declare_parameter("yellow_slow_distance_m", 30.0)
         self.declare_parameter("yellow_stop_distance_m", 8.0)
         self.declare_parameter("traffic_light_stop_buffer_m", 1.0)
+        self.declare_parameter("traffic_light_stop_front_bumper_offset_m", 2.0)
+        self.declare_parameter("traffic_light_stop_line_buffer_m", 1.0)
+        self.declare_parameter("traffic_light_stop_distance_tolerance_m", 0.4)
+        self.declare_parameter("traffic_light_stop_debug_enabled", True)
+        self.declare_parameter("traffic_light_stop_anchor_forward_offset_m", 0.0)
+        self.declare_parameter("traffic_light_post_green_ignore_s", 6.0)
+        self.declare_parameter("traffic_light_passed_ignore_distance_m", 8.0)
         self.declare_parameter("traffic_light_min_stop_speed_mps", 0.0)
         self.declare_parameter("yellow_slow_speed_mps", 1.5)
         self.declare_parameter("green_release_distance_m", 8.0)
@@ -141,6 +161,27 @@ class RouteEventAnalyzer(Node):
         self.traffic_light_stop_buffer_m = float(
             self.get_parameter("traffic_light_stop_buffer_m").value
         )
+        self.traffic_light_stop_front_bumper_offset_m = float(
+            self.get_parameter("traffic_light_stop_front_bumper_offset_m").value
+        )
+        self.traffic_light_stop_line_buffer_m = float(
+            self.get_parameter("traffic_light_stop_line_buffer_m").value
+        )
+        self.traffic_light_stop_distance_tolerance_m = float(
+            self.get_parameter("traffic_light_stop_distance_tolerance_m").value
+        )
+        self.traffic_light_stop_debug_enabled = bool(
+            self.get_parameter("traffic_light_stop_debug_enabled").value
+        )
+        self.traffic_light_stop_anchor_forward_offset_m = float(
+            self.get_parameter("traffic_light_stop_anchor_forward_offset_m").value
+        )
+        self.traffic_light_post_green_ignore_s = float(
+            self.get_parameter("traffic_light_post_green_ignore_s").value
+        )
+        self.traffic_light_passed_ignore_distance_m = float(
+            self.get_parameter("traffic_light_passed_ignore_distance_m").value
+        )
         self.traffic_light_min_stop_speed_mps = float(
             self.get_parameter("traffic_light_min_stop_speed_mps").value
         )
@@ -174,6 +215,7 @@ class RouteEventAnalyzer(Node):
         self.tl_stop_line_buffer_m = float(
             self.get_parameter("tl_stop_line_buffer_m").value
         )
+        self.tl_stop_line_buffer_m = self.traffic_light_stop_line_buffer_m
         self.tl_decel_max_mps2 = float(
             self.get_parameter("tl_decel_max_mps2").value
         )
@@ -207,6 +249,7 @@ class RouteEventAnalyzer(Node):
         self._traffic_light_state_memory: dict[int, tuple[str, float]] = {}
         self._restrictive_traffic_lights: dict[int, float] = {}
         self._green_release_until: dict[int, float] = {}
+        self._post_green_ignore_until: dict[int, float] = {}
         self._last_restrictive_tl_candidate: Optional[dict[str, Any]] = None
         self._last_restrictive_tl_time = 0.0
         self.active_tl_id: Optional[int] = None
@@ -436,6 +479,8 @@ class RouteEventAnalyzer(Node):
             "reason": reason,
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "active_light_id": self.active_tl_id,
+            "active_light_state": self.active_tl_state,
             "previous_tl_state": self.previous_tl_state,
             "stopped_for_tl_id": self.stopped_for_tl_id,
             "green_release_triggered": self.green_release_triggered,
@@ -443,6 +488,34 @@ class RouteEventAnalyzer(Node):
             "red_hold_active_after": self.red_hold_active_after,
             "stop_hold_cleared": self.stop_hold_cleared,
             "release_reason": self.release_reason,
+            "stopline_x": None,
+            "stopline_y": None,
+            "ego_center_x": None,
+            "ego_center_y": None,
+            "ego_front_x": None,
+            "ego_front_y": None,
+            "center_to_stopline_m": None,
+            "front_bumper_to_stopline_m": None,
+            "applied_stop_line_buffer_m": self.tl_stop_line_buffer_m,
+            "traffic_light_stop_front_bumper_offset_m": self.traffic_light_stop_front_bumper_offset_m,
+            "traffic_light_stop_distance_tolerance_m": self.traffic_light_stop_distance_tolerance_m,
+            "traffic_light_stop_anchor_forward_offset_m": self.traffic_light_stop_anchor_forward_offset_m,
+            "red_stop_trigger_reason": None,
+            "ego_road_id": None,
+            "ego_lane_id": None,
+            "active_light_road_id": None,
+            "active_light_lane_id": None,
+            "stopline_road_id": None,
+            "stopline_lane_id": None,
+            "same_lane_or_compatible": None,
+            "rejected_light_reason": None,
+            "desired_front_bumper_to_stopline_m": self.tl_stop_line_buffer_m,
+            "predicted_stop_distance_m": None,
+            "trigger_distance_m": None,
+            "final_front_bumper_to_stopline_m": None,
+            "stopline_anchor_source": None,
+            "stopline_anchor_confidence": None,
+            "visible_stopline_mismatch_possible": False,
         }
 
     def _candidate(
@@ -531,6 +604,64 @@ class RouteEventAnalyzer(Node):
             "stop_s": gate.stop_s if gate is not None else None,
             "distance_is_buffered": distance_is_buffered,
             "reason": reason,
+            "stopline_x": gate.stop_x if gate is not None else None,
+            "stopline_y": gate.stop_y if gate is not None else None,
+            "ego_center_x": gate.ego_center_x if gate is not None else None,
+            "ego_center_y": gate.ego_center_y if gate is not None else None,
+            "ego_front_x": gate.ego_front_x if gate is not None else None,
+            "ego_front_y": gate.ego_front_y if gate is not None else None,
+            "center_to_stopline_m": (
+                round(float(gate.center_to_stopline_m), 3)
+                if gate is not None and gate.center_to_stopline_m is not None
+                else None
+            ),
+            "front_bumper_to_stopline_m": (
+                round(float(gate.front_bumper_to_stopline_m), 3)
+                if gate is not None and gate.front_bumper_to_stopline_m is not None
+                else None
+            ),
+            "applied_stop_line_buffer_m": (
+                round(float(gate.applied_stop_line_buffer_m), 3)
+                if gate is not None and gate.applied_stop_line_buffer_m is not None
+                else stop_buffer_m
+            ),
+            "traffic_light_stop_front_bumper_offset_m": self.traffic_light_stop_front_bumper_offset_m,
+            "traffic_light_stop_distance_tolerance_m": self.traffic_light_stop_distance_tolerance_m,
+            "traffic_light_stop_anchor_forward_offset_m": (
+                round(float(gate.stop_anchor_forward_offset_m), 3)
+                if gate is not None and gate.stop_anchor_forward_offset_m is not None
+                else self.traffic_light_stop_anchor_forward_offset_m
+            ),
+            "red_stop_trigger_reason": reason if event in (
+                "traffic_light_red_stop",
+                "traffic_light_yellow_stop",
+            ) else None,
+            "ego_road_id": gate.ego_road_id if gate is not None else None,
+            "ego_lane_id": gate.ego_lane_id if gate is not None else None,
+            "active_light_road_id": gate.stopline_road_id if gate is not None else None,
+            "active_light_lane_id": gate.stopline_lane_id if gate is not None else None,
+            "stopline_road_id": gate.stopline_road_id if gate is not None else None,
+            "stopline_lane_id": gate.stopline_lane_id if gate is not None else None,
+            "same_lane_or_compatible": gate.same_lane_or_compatible if gate is not None else None,
+            "rejected_light_reason": None,
+            "desired_front_bumper_to_stopline_m": self.tl_stop_line_buffer_m,
+            "predicted_stop_distance_m": round(max(0.0, distance_ahead_m - self.tl_stop_line_buffer_m), 3),
+            "trigger_distance_m": round(
+                self.tl_stop_line_buffer_m + self.traffic_light_stop_distance_tolerance_m,
+                3,
+            ),
+            "final_front_bumper_to_stopline_m": (
+                round(float(gate.front_bumper_to_stopline_m), 3)
+                if gate is not None and gate.front_bumper_to_stopline_m is not None
+                else None
+            ),
+            "stopline_anchor_source": stop_point_source,
+            "stopline_anchor_confidence": confidence,
+            "visible_stopline_mismatch_possible": bool(
+                gate is not None
+                and gate.front_bumper_to_stopline_m is not None
+                and abs(float(gate.front_bumper_to_stopline_m) - self.tl_stop_line_buffer_m) > 0.8
+            ),
         }
 
     @staticmethod
@@ -639,6 +770,9 @@ class RouteEventAnalyzer(Node):
         self._last_restrictive_tl_time = 0.0
         self._green_release_until[traffic_light_id] = (
             now_monotonic + self.green_release_grace_s
+        )
+        self._post_green_ignore_until[traffic_light_id] = (
+            now_monotonic + self.traffic_light_post_green_ignore_s
         )
         self.last_tl_event = "traffic_light_green_clear"
         self.green_release_triggered = True
@@ -882,7 +1016,7 @@ class RouteEventAnalyzer(Node):
             0.0,
             distance_to_stop_m - self.tl_stop_line_buffer_m,
         )
-        if effective_distance <= self.tl_hard_stop_distance_m + 1e-6:
+        if effective_distance <= self.traffic_light_stop_distance_tolerance_m + 1e-6:
             return 0.0, True
 
         allowed_speed = math.sqrt(
@@ -1042,6 +1176,10 @@ class RouteEventAnalyzer(Node):
                     road_lane_match,
                     fence_intersection_found,
                     float(center_projection["lateral_distance_m"]),
+                    road_id,
+                    lane_id,
+                    route_road_id,
+                    route_lane_id,
                 )
 
         if best is None:
@@ -1066,6 +1204,15 @@ class RouteEventAnalyzer(Node):
             )
 
         raw_stop_distance_m = float(best[2])
+        adjusted_stop_s = (
+            float(best[1]["route_s_m"])
+            + self.traffic_light_stop_anchor_forward_offset_m
+        )
+        center_to_stopline_m = adjusted_stop_s - ego_route_s_m
+        front_bumper_to_stopline_m = max(
+            0.0,
+            center_to_stopline_m - self.traffic_light_stop_front_bumper_offset_m,
+        )
         source = str(best[3])
         if not best[6]:
             confidence = "low"
@@ -1079,6 +1226,24 @@ class RouteEventAnalyzer(Node):
                 "actor_location_fallback": "low",
             }.get(source, "low")
         location = best[4]
+        ego_center_x = None
+        ego_center_y = None
+        ego_front_x = None
+        ego_front_y = None
+        if isinstance(self._last_status, dict):
+            ego_loc = self._last_status.get("location", {})
+            ego_rot = self._last_status.get("rotation", {})
+            ego_center_x = float(ego_loc.get("x", 0.0))
+            ego_center_y = float(ego_loc.get("y", 0.0))
+            ego_yaw_rad = math.radians(float(ego_rot.get("yaw", 0.0)))
+            ego_front_x = (
+                ego_center_x
+                + math.cos(ego_yaw_rad) * self.traffic_light_stop_front_bumper_offset_m
+            )
+            ego_front_y = (
+                ego_center_y
+                + math.sin(ego_yaw_rad) * self.traffic_light_stop_front_bumper_offset_m
+            )
         gate = TrafficLightStopGate(
             light_id=int(traffic_light.id),
             light_state="Unknown",
@@ -1087,17 +1252,31 @@ class RouteEventAnalyzer(Node):
             stop_y=float(location.y),
             stop_z=float(location.z),
             stop_route_index=int(best[1]["route_index"]),
-            stop_s=float(best[1]["route_s_m"]),
-            distance_to_stop_m=max(
-                0.0,
-                raw_stop_distance_m,
-            ),
+            stop_s=adjusted_stop_s,
+            distance_to_stop_m=front_bumper_to_stopline_m,
             distance_to_light_m=distance_to_light_m,
             lateral_distance_m=float(best[7]),
             confidence=confidence,
             road_lane_match=best[5],
             fence_intersection_found=bool(best[6]),
             projection=best[1],
+            center_to_stopline_m=max(0.0, center_to_stopline_m),
+            front_bumper_to_stopline_m=front_bumper_to_stopline_m,
+            ego_center_x=round(ego_center_x, 3) if ego_center_x is not None else None,
+            ego_center_y=round(ego_center_y, 3) if ego_center_y is not None else None,
+            ego_front_x=round(ego_front_x, 3) if ego_front_x is not None else None,
+            ego_front_y=round(ego_front_y, 3) if ego_front_y is not None else None,
+            applied_stop_line_buffer_m=self.tl_stop_line_buffer_m,
+            stop_anchor_forward_offset_m=self.traffic_light_stop_anchor_forward_offset_m,
+            stopline_road_id=int(best[8]) if best[8] is not None else None,
+            stopline_lane_id=int(best[9]) if best[9] is not None else None,
+            ego_road_id=int(best[10]) if best[10] is not None else None,
+            ego_lane_id=int(best[11]) if best[11] is not None else None,
+            same_lane_or_compatible=(
+                bool(best[5])
+                if best[5] is not None
+                else None
+            ),
         )
         return gate, rejection_reasons
 
@@ -1150,6 +1329,8 @@ class RouteEventAnalyzer(Node):
             ),
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "active_light_id": self.active_tl_id,
+            "active_light_state": self.active_tl_state,
             "previous_tl_state": self.previous_tl_state,
             "active_stop_s": self.active_stop_s,
             "active_stop_route_index": self.active_stop_route_index,
@@ -1379,10 +1560,23 @@ class RouteEventAnalyzer(Node):
                 state = self._get_traffic_light_state(traffic_light)
                 gate.light_state = state
                 traffic_light_id = int(traffic_light.id)
+                if (
+                    state in ("Red", "Yellow")
+                    and now_monotonic <= self._post_green_ignore_until.get(traffic_light_id, 0.0)
+                ):
+                    debug["rejected_lights_count"] += 1
+                    reason_counts = debug["traffic_light_rejection_reasons"]
+                    reason = "post_green_ignore_active"
+                    reason_counts[reason] = reason_counts.get(reason, 0) + 1
+                    continue
                 if signed_stop_distance_m < 0.0 and not (
                     self.red_hold_active
                     and traffic_light_id == self.stopped_for_tl_id
                 ):
+                    if signed_stop_distance_m <= -self.traffic_light_passed_ignore_distance_m:
+                        self._post_green_ignore_until[traffic_light_id] = (
+                            now_monotonic + self.traffic_light_post_green_ignore_s
+                        )
                     if (
                         traffic_light_id == self.active_tl_id
                         and signed_stop_distance_m
@@ -1565,6 +1759,9 @@ class RouteEventAnalyzer(Node):
                     ):
                         self._green_release_until[traffic_light_id] = (
                             now_monotonic + self.green_release_grace_s
+                        )
+                        self._post_green_ignore_until[traffic_light_id] = (
+                            now_monotonic + self.traffic_light_post_green_ignore_s
                         )
                     if (
                         candidate is None
@@ -1768,8 +1965,20 @@ class RouteEventAnalyzer(Node):
             "selected_stop_y": payload["stop_y"],
             "selected_stop_s": payload["stop_s"],
             "selected_reason": payload["reason"],
+            "stopline_x": payload.get("stopline_x"),
+            "stopline_y": payload.get("stopline_y"),
+            "ego_center_x": payload.get("ego_center_x"),
+            "ego_center_y": payload.get("ego_center_y"),
+            "ego_front_x": payload.get("ego_front_x"),
+            "ego_front_y": payload.get("ego_front_y"),
+            "center_to_stopline_m": payload.get("center_to_stopline_m"),
+            "front_bumper_to_stopline_m": payload.get("front_bumper_to_stopline_m"),
+            "applied_stop_line_buffer_m": payload.get("applied_stop_line_buffer_m"),
+            "red_stop_trigger_reason": payload.get("red_stop_trigger_reason"),
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "active_light_id": self.active_tl_id,
+            "active_light_state": self.active_tl_state,
             "previous_tl_state": self.previous_tl_state,
             "active_stop_s": self.active_stop_s,
             "active_stop_route_index": self.active_stop_route_index,
@@ -1833,8 +2042,20 @@ class RouteEventAnalyzer(Node):
             "selected_stop_y": payload["stop_y"],
             "selected_stop_s": payload["stop_s"],
             "selected_reason": payload["reason"],
+            "stopline_x": payload.get("stopline_x"),
+            "stopline_y": payload.get("stopline_y"),
+            "ego_center_x": payload.get("ego_center_x"),
+            "ego_center_y": payload.get("ego_center_y"),
+            "ego_front_x": payload.get("ego_front_x"),
+            "ego_front_y": payload.get("ego_front_y"),
+            "center_to_stopline_m": payload.get("center_to_stopline_m"),
+            "front_bumper_to_stopline_m": payload.get("front_bumper_to_stopline_m"),
+            "applied_stop_line_buffer_m": payload.get("applied_stop_line_buffer_m"),
+            "red_stop_trigger_reason": payload.get("red_stop_trigger_reason"),
             "active_tl_id": self.active_tl_id,
             "active_tl_state": self.active_tl_state,
+            "active_light_id": self.active_tl_id,
+            "active_light_state": self.active_tl_state,
             "previous_tl_state": self.previous_tl_state,
             "active_stop_s": self.active_stop_s,
             "active_stop_route_index": self.active_stop_route_index,

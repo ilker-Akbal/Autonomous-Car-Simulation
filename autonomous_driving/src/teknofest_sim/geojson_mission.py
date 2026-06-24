@@ -25,6 +25,16 @@ class MissionPoint:
     lane_id: Optional[int] = None
     kind: Optional[str] = None
 
+    # Optional raw task stop pose. If present, planning uses this exact
+    # pull-over/stop pose instead of computing a lateral offset from carla_x/y.
+    task_stop_mode: Optional[str] = None
+    task_stop_source: Optional[str] = None
+    task_stop_side: Optional[str] = None
+    task_stop_x: Optional[float] = None
+    task_stop_y: Optional[float] = None
+    task_stop_z: Optional[float] = None
+    task_stop_yaw: Optional[float] = None
+
     # Legacy/debug alanları. Yarışma modunda bunların görevi rota vermek değildir.
     route_index: Optional[int] = None
     route_distance_m: Optional[float] = None
@@ -234,6 +244,25 @@ def _point_from_feature(feature: dict) -> MissionPoint:
         road_id=_int_or_none(props.get("road_id", None)),
         lane_id=_int_or_none(props.get("lane_id", None)),
         kind=kind,
+        task_stop_mode=(
+            str(props.get("task_stop_mode")).strip()
+            if props.get("task_stop_mode") is not None
+            else None
+        ),
+        task_stop_source=(
+            str(props.get("task_stop_source")).strip()
+            if props.get("task_stop_source") is not None
+            else None
+        ),
+        task_stop_side=(
+            str(props.get("task_stop_side")).strip()
+            if props.get("task_stop_side") is not None
+            else None
+        ),
+        task_stop_x=_float_or_none(props.get("task_stop_x", None)),
+        task_stop_y=_float_or_none(props.get("task_stop_y", None)),
+        task_stop_z=_float_or_none(props.get("task_stop_z", None)),
+        task_stop_yaw=_float_or_none(props.get("task_stop_yaw", None)),
         route_index=_int_or_none(props.get("route_index", None)),
         route_distance_m=_float_or_none(props.get("route_distance_m", None)),
     )

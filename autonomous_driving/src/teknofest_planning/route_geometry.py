@@ -2,6 +2,33 @@ import math
 from typing import Any
 
 
+def angle_diff_deg(a: float, b: float) -> float:
+    return abs((a - b + 180.0) % 360.0 - 180.0)
+
+
+def signed_angle_diff_deg(a: float, b: float) -> float:
+    return (a - b + 180.0) % 360.0 - 180.0
+
+
+def classify_turn_direction(
+    entry_yaw_deg: float,
+    exit_yaw_deg: float,
+    straight_threshold_deg: float = 25.0,
+    u_turn_threshold_deg: float = 135.0,
+) -> str:
+    delta = signed_angle_diff_deg(exit_yaw_deg, entry_yaw_deg)
+    abs_delta = abs(delta)
+    if abs_delta >= u_turn_threshold_deg:
+        return "u_turn"
+    if abs_delta <= straight_threshold_deg:
+        return "straight"
+    if delta > 0.0:
+        return "left"
+    if delta < 0.0:
+        return "right"
+    return "unknown"
+
+
 def distance_2d(x1: float, y1: float, x2: float, y2: float) -> float:
     return math.hypot(x2 - x1, y2 - y1)
 
@@ -133,6 +160,37 @@ def route_distance_between_indices(
     start_index = max(0, min(len(points) - 1, start_index))
     end_index = max(0, min(len(points) - 1, end_index))
     return route_s[end_index] - route_s[start_index]
+
+
+def route_continuity_ok(
+    points: list[dict[str, Any]],
+    max_segment_distance_m: float = 8.0,
+    max_yaw_delta_deg: float = 120.0,
+) -> bool:
+    if len(points) < 2:
+        return True
+
+    for previous, current in zip(points, points[1:]):
+        segment_distance = distance_2d(
+            float(previous.get("x", 0.0)),
+            float(previous.get("y", 0.0)),
+            float(current.get("x", 0.0)),
+            float(current.get("y", 0.0)),
+        )
+        if segment_distance > max_segment_distance_m:
+            return False
+
+        if bool(previous.get("is_junction", False)) or bool(current.get("is_junction", False)):
+            continue
+
+        yaw_delta = angle_diff_deg(
+            float(previous.get("yaw", 0.0)),
+            float(current.get("yaw", 0.0)),
+        )
+        if yaw_delta > max_yaw_delta_deg:
+            return False
+
+    return True
 
 
 def build_local_route_segment(
