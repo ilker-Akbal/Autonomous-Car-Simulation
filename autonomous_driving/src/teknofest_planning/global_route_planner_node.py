@@ -128,6 +128,8 @@ class GlobalRoutePlannerNode(Node):
             "rejected_wrong_way_count": 0,
             "route_initial_heading_deg": None,
             "ego_yaw_deg": None,
+            "ego_waypoint_yaw_deg": None,
+            "route_reference_yaw_deg": None,
             "initial_heading_error_deg": None,
             "route_initial_heading_error_deg": None,
             "route_initial_wrong_way": False,
@@ -138,6 +140,10 @@ class GlobalRoutePlannerNode(Node):
             "first_forward_route_x": None,
             "first_forward_route_y": None,
             "first_forward_route_distance_m": None,
+            "seed_replan_attempted": False,
+            "seed_replan_success": False,
+            "seed_replan_distance_m": None,
+            "seed_replan_reason": None,
             "candidate_wrong_way": False,
             "route_valid": False,
             "route_reject_reason": None,
@@ -936,6 +942,58 @@ class GlobalRoutePlannerNode(Node):
             "route_continuity_ok": True,
         }
 
+    def _densify_waypoints(self, waypoints: list[Any]) -> list[Any]:
+        if len(waypoints) < 2:
+            return waypoints
+
+        densified: list[Any] = [waypoints[0]]
+        step_m = max(1.0, min(self.global_sampling_resolution_m, self.route_safety_max_point_gap_m * 0.5))
+        stop_gap_m = max(2.0, self.route_safety_max_point_gap_m * 0.75)
+
+        for target in waypoints[1:]:
+            current = densified[-1]
+            guard = 0
+            while self._waypoint_distance(current, target) > stop_gap_m and guard < 32:
+                guard += 1
+                try:
+                    candidates = list(current.next(step_m))
+                except Exception:
+                    break
+                if not candidates:
+                    break
+
+                current_gap = self._waypoint_distance(current, target)
+                usable = [
+                    candidate
+                    for candidate in candidates
+                    if candidate is not None
+                    and self._is_driving_waypoint(candidate)
+                    and self._same_direction_waypoint(candidate, current, max_yaw_delta_deg=90.0)
+                    and self._waypoint_distance(candidate, target) < current_gap - 0.1
+                ]
+                if not usable:
+                    break
+
+                best = min(
+                    usable,
+                    key=lambda candidate: (
+                        self._waypoint_distance(candidate, target),
+                        angle_diff_deg(
+                            float(candidate.transform.rotation.yaw),
+                            float(target.transform.rotation.yaw),
+                        ),
+                    ),
+                )
+                if self._waypoint_distance(best, current) < 0.1:
+                    break
+                densified.append(best)
+                current = best
+
+            if self._waypoint_distance(densified[-1], target) > 0.1:
+                densified.append(target)
+
+        return densified
+
     def _build_route_points(
         self,
         waypoints: list[Any],
@@ -1160,7 +1218,7 @@ class GlobalRoutePlannerNode(Node):
         return True
 
     def _apply_right_lane_policy(self, route: list[tuple[Any, Any]]) -> list[dict[str, Any]]:
-        original_waypoints = [waypoint for waypoint, _ in route]
+        original_waypoints = self._densify_waypoints([waypoint for waypoint, _ in route])
         if not original_waypoints:
             self._right_lane_policy_debug = {
                 "right_lane_policy_enabled": self.right_lane_policy_enabled,
@@ -1310,6 +1368,66 @@ class GlobalRoutePlannerNode(Node):
             "GlobalRoutePlanner: right lane projection broke route continuity; "
             "using original CARLA route fallback.",
         )
+        return self._apply_sign_constraints(original_points)
+
+    def _build_original_route_fallback_points(
+        self,
+        route: list[tuple[Any, Any]],
+        reject_reason: str,
+    ) -> list[dict[str, Any]]:
+        original_waypoints = self._densify_waypoints([waypoint for waypoint, _ in route])
+        original_debugs = [
+            self._original_route_policy_debug(
+                waypoint,
+                reason="route_lane_center_locked",
+                status="fallback_to_original_safety_failed",
+                rejected_reason=reject_reason,
+            )
+            for waypoint in original_waypoints
+        ]
+        original_points = self._build_route_points(original_waypoints, original_debugs)
+        max_segment_distance_m = max(
+            8.0,
+            self.global_sampling_resolution_m * 3.0
+            + self.right_lane_projection_max_distance_m,
+        )
+        original_continuity_ok = route_continuity_ok(
+            original_points,
+            max_segment_distance_m=max_segment_distance_m,
+        )
+        for point in original_points:
+            point["route_continuity_ok"] = original_continuity_ok
+            point["right_lane_projection_status"] = "fallback_to_original_safety_failed"
+            point["right_lane_projection_rejected_reason"] = reject_reason
+            point["right_lane_projection_failed_reason"] = reject_reason
+
+        self._right_lane_policy_debug = {
+            "right_lane_policy_enabled": self.right_lane_policy_enabled,
+            "preferred_lane_side": self.preferred_lane_side,
+            "lane_jump_disabled": True,
+            "route_lane_id": original_points[0].get("route_lane_id") if original_points else None,
+            "requested_right_lane_id": original_points[0].get("requested_right_lane_id") if original_points else None,
+            "selected_lane_id": original_points[0].get("selected_lane_id") if original_points else None,
+            "selected_road_id": original_points[0].get("selected_road_id") if original_points else None,
+            "right_lane_projection_status": "fallback_to_original_safety_failed",
+            "right_lane_projection_rejected_reason": reject_reason,
+            "right_lane_fallback_used": True,
+            "fallback_kept_right_lane": False,
+            "right_lane_reason": original_points[0].get("right_lane_reason") if original_points else None,
+            "right_lane_projection_count": 0,
+            "right_lane_projection_failed_count": 1,
+            "right_lane_projection_partial_fallback_count": 0,
+            "right_lane_candidate_count": 0,
+            "wrong_way_rejected_count": 0,
+            "right_lane_projection_failed_reason": reject_reason,
+            "right_lane_projection_attempted": True,
+            "right_lane_projection_result": (
+                "fallback_to_original" if original_continuity_ok else "rejected"
+            ),
+            "right_lane_projection_reject_reason": reject_reason,
+            "route_continuity_ok": original_continuity_ok,
+            "right_lane_route_continuity_ok": False,
+        }
         return self._apply_sign_constraints(original_points)
 
         mixed_waypoints: list[Any] = []
@@ -1540,6 +1658,79 @@ class GlobalRoutePlannerNode(Node):
 
         return False
 
+    def _seeded_forward_route_from_ego_lane(
+        self,
+        start_wp: Any,
+        goal_wp: Any,
+    ) -> tuple[list[tuple[Any, Any]], dict[str, Any]]:
+        debug: dict[str, Any] = {
+            "seed_replan_attempted": True,
+            "seed_replan_success": False,
+            "seed_replan_distance_m": None,
+            "seed_replan_reason": "no_seed_candidate",
+        }
+        if self._route_planner is None or start_wp is None or goal_wp is None:
+            debug["seed_replan_reason"] = "seed_replan_unavailable"
+            return [], debug
+
+        goal_location = goal_wp.transform.location
+        seed_distances_m = (2.0, 4.0, 6.0, 8.0, 10.0)
+        for seed_distance_m in seed_distances_m:
+            try:
+                candidates = list(start_wp.next(seed_distance_m))
+            except Exception as exc:
+                debug["seed_replan_reason"] = f"seed_next_failed:{exc}"
+                continue
+
+            same_lane_candidates = [
+                candidate
+                for candidate in candidates
+                if candidate is not None
+                and getattr(candidate, "road_id", None) == getattr(start_wp, "road_id", None)
+                and getattr(candidate, "lane_id", None) == getattr(start_wp, "lane_id", None)
+                and self._is_driving_waypoint(candidate)
+                and self._same_direction_waypoint(candidate, start_wp, max_yaw_delta_deg=60.0)
+            ]
+            compatible_candidates = same_lane_candidates or [
+                candidate
+                for candidate in candidates
+                if candidate is not None
+                and self._is_driving_waypoint(candidate)
+                and self._same_direction_waypoint(candidate, start_wp, max_yaw_delta_deg=75.0)
+            ]
+            compatible_candidates.sort(
+                key=lambda candidate: (
+                    getattr(candidate, "road_id", None) != getattr(start_wp, "road_id", None),
+                    getattr(candidate, "lane_id", None) != getattr(start_wp, "lane_id", None),
+                    angle_diff_deg(
+                        float(candidate.transform.rotation.yaw),
+                        float(start_wp.transform.rotation.yaw),
+                    ),
+                )
+            )
+
+            for seed_wp in compatible_candidates:
+                try:
+                    route = self._route_planner.trace_route(
+                        seed_wp.transform.location,
+                        goal_location,
+                    )
+                except Exception as exc:
+                    debug["seed_replan_reason"] = f"seed_trace_failed:{exc}"
+                    continue
+
+                if route:
+                    debug.update(
+                        {
+                            "seed_replan_success": True,
+                            "seed_replan_distance_m": seed_distance_m,
+                            "seed_replan_reason": "ego_lane_forward_seed",
+                        }
+                    )
+                    return route, debug
+
+        return [], debug
+
     def _plan_route(self) -> None:
         if not self._last_goal_ok or self._last_goal is None:
             self._clear_route("mission_goal_unavailable")
@@ -1577,18 +1768,47 @@ class GlobalRoutePlannerNode(Node):
         self._route_validation_debug["raw_route_len"] = len(route)
         route = self._repair_initial_wrong_way_route(route)
         if not route:
-            raw_route_len = int(self._route_validation_debug.get("raw_route_len", 0))
-            validation_debug = dict(self._route_validation_debug)
-            self._clear_route("route_initial_wrong_way")
-            self._route_validation_debug.update(validation_debug)
-            self._route_validation_debug["raw_route_len"] = raw_route_len
-            self._route_validation_debug["route_valid"] = False
-            self._route_validation_debug["route_reject_reason"] = "route_initial_wrong_way"
-            return
+            original_validation_debug = dict(self._route_validation_debug)
+            seeded_route, seed_debug = self._seeded_forward_route_from_ego_lane(
+                start_wp,
+                goal_wp,
+            )
+            if seeded_route:
+                self._route_validation_debug["raw_route_len"] = len(seeded_route)
+                route = self._repair_initial_wrong_way_route(seeded_route)
+                self._route_validation_debug.update(seed_debug)
+            if not route:
+                raw_route_len = int(original_validation_debug.get("raw_route_len", 0))
+                validation_debug = {
+                    **original_validation_debug,
+                    **seed_debug,
+                }
+                self._clear_route("route_initial_wrong_way")
+                self._route_validation_debug.update(validation_debug)
+                self._route_validation_debug["raw_route_len"] = raw_route_len
+                self._route_validation_debug["route_valid"] = False
+                self._route_validation_debug["route_reject_reason"] = "route_initial_wrong_way"
+                return
 
         points = self._apply_right_lane_policy(route)
+        route_ready = bool(points) and self._validate_final_route_points(points)
+        if (
+            not route_ready
+            and points
+            and bool(self._right_lane_policy_debug.get("right_lane_projection_attempted", False))
+            and self._right_lane_policy_debug.get("right_lane_projection_status") == "ok"
+        ):
+            projected_reject_reason = str(
+                self._route_validation_debug.get("route_safety_reject_reason")
+                or "projected_route_safety_failed"
+            )
+            points = self._build_original_route_fallback_points(
+                route,
+                projected_reject_reason,
+            )
+            route_ready = bool(points) and self._validate_final_route_points(points)
 
-        if points and self._validate_final_route_points(points):
+        if route_ready:
             self._route_points = points
             self._last_route_time = time.time()
             self._replan_reason = "route_ready"
@@ -1614,6 +1834,8 @@ class GlobalRoutePlannerNode(Node):
             {
                 "route_initial_heading_deg": None,
                 "ego_yaw_deg": None,
+                "ego_waypoint_yaw_deg": None,
+                "route_reference_yaw_deg": None,
                 "initial_heading_error_deg": None,
                 "route_initial_heading_error_deg": None,
                 "route_initial_wrong_way": False,
@@ -1624,6 +1846,10 @@ class GlobalRoutePlannerNode(Node):
                 "first_forward_route_x": None,
                 "first_forward_route_y": None,
                 "first_forward_route_distance_m": None,
+                "seed_replan_attempted": False,
+                "seed_replan_success": False,
+                "seed_replan_distance_m": None,
+                "seed_replan_reason": None,
                 "candidate_wrong_way": False,
             }
         )
@@ -1666,12 +1892,22 @@ class GlobalRoutePlannerNode(Node):
 
         return route_yaw
 
+    def _ego_waypoint_yaw(self) -> Optional[float]:
+        waypoint = self._get_ego_waypoint()
+        if waypoint is None:
+            return None
+        try:
+            return float(waypoint.transform.rotation.yaw)
+        except Exception:
+            return None
+
     def _first_forward_route_index(
         self,
         route: list[tuple[Any, Any]],
         pose: dict[str, float],
+        reference_yaw_deg: Optional[float] = None,
     ) -> tuple[Optional[int], Optional[float], Optional[float]]:
-        ego_yaw = float(pose["yaw"])
+        ego_yaw = float(pose["yaw"] if reference_yaw_deg is None else reference_yaw_deg)
         ego_yaw_rad = math.radians(ego_yaw)
         forward_x = math.cos(ego_yaw_rad)
         forward_y = math.sin(ego_yaw_rad)
@@ -1712,21 +1948,42 @@ class GlobalRoutePlannerNode(Node):
             return route
 
         ego_yaw = float(pose["yaw"])
+        ego_waypoint_yaw = self._ego_waypoint_yaw()
         route_yaw = self._route_heading_from_index(route, 0)
         if route_yaw is None:
             self._route_validation_debug["route_initial_wrong_way_action"] = "skipped"
             return route
 
         heading_error = angle_diff_deg(route_yaw, ego_yaw)
+        waypoint_heading_error = (
+            angle_diff_deg(route_yaw, ego_waypoint_yaw)
+            if ego_waypoint_yaw is not None
+            else None
+        )
+        reference_yaw = (
+            ego_waypoint_yaw
+            if waypoint_heading_error is not None and waypoint_heading_error <= 75.0
+            else ego_yaw
+        )
+        reference_heading_error = angle_diff_deg(route_yaw, reference_yaw)
         self._route_validation_debug["route_initial_heading_deg"] = round(route_yaw, 3)
         self._route_validation_debug["ego_yaw_deg"] = round(ego_yaw, 3)
-        self._route_validation_debug["initial_heading_error_deg"] = round(heading_error, 3)
-        self._route_validation_debug["route_initial_heading_error_deg"] = round(heading_error, 3)
-        self._route_validation_debug["candidate_wrong_way"] = (
-            heading_error > self.route_initial_wrong_way_reject_deg
+        self._route_validation_debug["ego_waypoint_yaw_deg"] = (
+            round(ego_waypoint_yaw, 3) if ego_waypoint_yaw is not None else None
         )
-        if heading_error <= self.route_initial_wrong_way_reject_deg:
-            self._route_validation_debug["route_initial_wrong_way_action"] = "accepted"
+        self._route_validation_debug["route_reference_yaw_deg"] = round(reference_yaw, 3)
+        self._route_validation_debug["initial_heading_error_deg"] = round(reference_heading_error, 3)
+        self._route_validation_debug["route_initial_heading_error_deg"] = round(reference_heading_error, 3)
+        self._route_validation_debug["candidate_wrong_way"] = (
+            reference_heading_error > self.route_initial_wrong_way_reject_deg
+        )
+        if reference_heading_error <= self.route_initial_wrong_way_reject_deg:
+            self._route_validation_debug["route_initial_wrong_way_action"] = (
+                "accepted_ego_waypoint_heading"
+                if heading_error > self.route_initial_wrong_way_reject_deg
+                and reference_yaw == ego_waypoint_yaw
+                else "accepted"
+            )
             return route
 
         self._route_validation_debug["route_initial_wrong_way"] = True
@@ -1735,6 +1992,7 @@ class GlobalRoutePlannerNode(Node):
         forward_index, forward_yaw, forward_error = self._first_forward_route_index(
             route,
             pose,
+            reference_yaw_deg=reference_yaw,
         )
         if forward_index is not None and forward_index > 0 and len(route) - forward_index >= 2:
             forward_waypoint = route[forward_index][0]
@@ -1777,7 +2035,7 @@ class GlobalRoutePlannerNode(Node):
             self._warn_throttled(
                 "route_initial_wrong_way_trimmed",
                 "GlobalRoutePlanner: initial wrong-way segment trimmed "
-                f"heading_error={round(heading_error, 3)} deg "
+                f"heading_error={round(reference_heading_error, 3)} deg "
                 f"trimmed_points={forward_index} goal={self._last_goal.get('name')}",
             )
             return route[forward_index:]
@@ -1793,7 +2051,7 @@ class GlobalRoutePlannerNode(Node):
         self._warn_throttled(
             "route_initial_wrong_way",
             "GlobalRoutePlanner: rejecting route_initial_wrong_way "
-            f"heading_error={round(heading_error, 3)} deg goal={self._last_goal.get('name')}",
+            f"heading_error={round(reference_heading_error, 3)} deg goal={self._last_goal.get('name')}",
         )
         return []
 
@@ -1819,7 +2077,11 @@ class GlobalRoutePlannerNode(Node):
         pose, _ = self._ego_pose()
         if pose is not None:
             first = points[0]
-            ego_yaw_rad = math.radians(float(pose["yaw"]))
+            reference_yaw = self._ego_waypoint_yaw()
+            if reference_yaw is None:
+                reference_yaw = float(pose["yaw"])
+            self._route_validation_debug["route_reference_yaw_deg"] = round(reference_yaw, 3)
+            ego_yaw_rad = math.radians(float(reference_yaw))
             dx = float(first.get("x", 0.0)) - float(pose["x"])
             dy = float(first.get("y", 0.0)) - float(pose["y"])
             along_track_m = dx * math.cos(ego_yaw_rad) + dy * math.sin(ego_yaw_rad)
