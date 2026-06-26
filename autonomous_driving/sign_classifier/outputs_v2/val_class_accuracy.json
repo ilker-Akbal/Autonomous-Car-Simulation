@@ -1,0 +1,132 @@
+{
+  "ada_etrafinda_donunuz": {
+    "correct": 122,
+    "total": 122,
+    "accuracy": 1.0
+  },
+  "dikkat": {
+    "correct": 110,
+    "total": 110,
+    "accuracy": 1.0
+  },
+  "dur": {
+    "correct": 109,
+    "total": 109,
+    "accuracy": 1.0
+  },
+  "girisi_olmayan_yol": {
+    "correct": 102,
+    "total": 102,
+    "accuracy": 1.0
+  },
+  "hiz_siniri_20": {
+    "correct": 133,
+    "total": 133,
+    "accuracy": 1.0
+  },
+  "hiz_siniri_30": {
+    "correct": 125,
+    "total": 125,
+    "accuracy": 1.0
+  },
+  "hiz_siniri_40": {
+    "correct": 115,
+    "total": 115,
+    "accuracy": 1.0
+  },
+  "hiz_siniri_50": {
+    "correct": 128,
+    "total": 128,
+    "accuracy": 1.0
+  },
+  "iki_yonlu_yol": {
+    "correct": 113,
+    "total": 113,
+    "accuracy": 1.0
+  },
+  "ileri_mecburi_yon": {
+    "correct": 115,
+    "total": 115,
+    "accuracy": 1.0
+  },
+  "ileri_ve_saga_mecburi_yon": {
+    "correct": 121,
+    "total": 121,
+    "accuracy": 1.0
+  },
+  "ileri_ve_sola_mecburi_yon": {
+    "correct": 126,
+    "total": 126,
+    "accuracy": 1.0
+  },
+  "isikli_isaret_cihazi": {
+    "correct": 139,
+    "total": 139,
+    "accuracy": 1.0
+  },
+  "okul_gecidi": {
+    "correct": 121,
+    "total": 121,
+    "accuracy": 1.0
+  },
+  "park_etmek_yasaktir": {
+    "correct": 122,
+    "total": 122,
+    "accuracy": 1.0
+  },
+  "park_yeri": {
+    "correct": 121,
+    "total": 121,
+    "accuracy": 1.0
+  },
+  "saga_donulmez": {
+    "correct": 129,
+    "total": 129,
+    "accuracy": 1.0
+  },
+  "saga_mecburi_yon": {
+    "correct": 102,
+    "total": 102,
+    "accuracy": 1.0
+  },
+  "sagdan_gidiniz": {
+    "correct": 112,
+    "total": 112,
+    "accuracy": 1.0
+  },
+  "sola_donulmez": {
+    "correct": 107,
+    "total": 107,
+    "accuracy": 1.0
+  },
+  "sola_mecburi_yon": {
+    "correct": 128,
+    "total": 128,
+    "accuracy": 1.0
+  },
+  "soldan_gidiniz": {
+    "correct": 119,
+    "total": 119,
+    "accuracy": 1.0
+  },
+  "tunel": {
+    "correct": 106,
+    "total": 106,
+    "accuracy": 1.0
+  },
+  "yaya_gecidi": {
+    "correct": 114,
+    "total": 114,
+    "accuracy": 1.0
+  },
+  "yol_calismasi": {
+    "correct": 115,
+    "total": 115,
+    "accuracy": 1.0
+  },
+  "yol_ver": {
+    "correct": 113,
+    "total": 113,
+    "accuracy": 1.0
+  }
+}
