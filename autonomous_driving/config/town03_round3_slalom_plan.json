@@ -1,0 +1,49 @@
+{
+  "enabled": true,
+  "source": "fixed_world_spline",
+  "coordinate_unit": "meters",
+  "start_side": "left",
+  "slalom_clearance_m": 1.75,
+  "slalom_speed_mps": 2.5,
+  "override_slalom_speed_limit": false,
+  "entry_margin_m": 24.0,
+  "exit_margin_m": 16.0,
+  "pre_pass_lead_m": 4.5,
+  "post_pass_hold_m": 2.5,
+  "sample_step_m": 0.25,
+  "activation_distance_m": 80.0,
+  "max_slalom_segment_m": 1.2,
+  "max_join_segment_m": 10.0,
+  "max_yaw_jump_deg": 60.0,
+  "min_output_route_len": 40,
+  "use_base_route_entry_exit": true,
+  "neutral_lane_y_m": -5.2,
+  "lane_y_min": -7.15,
+  "lane_y_max": -3.25,
+  "vehicle_half_width_m": 0.95,
+  "cone_radius_m": 0.18,
+  "cone_safety_margin_m": 0.15,
+  "min_required_center_clearance_m": 1.25,
+  "keep_vehicle_body_inside_lane": false,
+  "allow_slalom_if_geometry_infeasible": true,
+  "cones": [
+    {
+      "name": "cone_1",
+      "x": 190.0,
+      "y": -4.35,
+      "z": 0.0
+    },
+    {
+      "name": "cone_2",
+      "x": 170.0,
+      "y": -5.85,
+      "z": 0.0
+    },
+    {
+      "name": "cone_3",
+      "x": 150.0,
+      "y": -4.35,
+      "z": 0.0
+    }
+  ]
+}

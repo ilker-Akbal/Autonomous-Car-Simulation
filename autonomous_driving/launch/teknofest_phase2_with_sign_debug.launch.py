@@ -13,6 +13,7 @@ def generate_launch_description():
     package_root = Path(__file__).resolve().parent.parent
     phase2_launch_path = package_root / "launch" / "teknofest_phase2_drive.launch.py"
     default_mission_geojson = package_root / "missions" / "teknofest_town03_competition_v4_tasks_only.geojson"
+    default_slalom_plan_json = package_root / "config" / "town03_round3_slalom_plan.json"
 
     town = LaunchConfiguration("town")
     mission_geojson = LaunchConfiguration("mission_geojson")
@@ -87,6 +88,13 @@ def generate_launch_description():
         "task_stop_no_stop_before_final_distance_m"
     )
     task_stop_phase_hysteresis_m = LaunchConfiguration("task_stop_phase_hysteresis_m")
+    enable_slalom = LaunchConfiguration("enable_slalom")
+    slalom_plan_json = LaunchConfiguration("slalom_plan_json")
+    slalom_start_side = LaunchConfiguration("slalom_start_side")
+    slalom_clearance_m = LaunchConfiguration("slalom_clearance_m")
+    slalom_speed_mps = LaunchConfiguration("slalom_speed_mps")
+    slalom_activation_horizon_m = LaunchConfiguration("slalom_activation_horizon_m")
+    slalom_route_corridor_m = LaunchConfiguration("slalom_route_corridor_m")
 
     enable_sign_perception = LaunchConfiguration("enable_sign_perception")
     detection_roi_enabled = LaunchConfiguration("detection_roi_enabled")
@@ -153,6 +161,13 @@ def generate_launch_description():
         DeclareLaunchArgument("task_stop_min_creep_speed_mps", default_value="0.6"),
         DeclareLaunchArgument("task_stop_no_stop_before_final_distance_m", default_value="1.0"),
         DeclareLaunchArgument("task_stop_phase_hysteresis_m", default_value="0.75"),
+        DeclareLaunchArgument("enable_slalom", default_value="false"),
+        DeclareLaunchArgument("slalom_plan_json", default_value=str(default_slalom_plan_json)),
+        DeclareLaunchArgument("slalom_start_side", default_value="right"),
+        DeclareLaunchArgument("slalom_clearance_m", default_value="1.5"),
+        DeclareLaunchArgument("slalom_speed_mps", default_value="1.6"),
+        DeclareLaunchArgument("slalom_activation_horizon_m", default_value="80.0"),
+        DeclareLaunchArgument("slalom_route_corridor_m", default_value="6.0"),
 
         DeclareLaunchArgument("enable_sign_perception", default_value="true"),
         DeclareLaunchArgument("detection_roi_enabled", default_value="true"),
@@ -223,6 +238,13 @@ def generate_launch_description():
                 "task_stop_min_creep_speed_mps": task_stop_min_creep_speed_mps,
                 "task_stop_no_stop_before_final_distance_m": task_stop_no_stop_before_final_distance_m,
                 "task_stop_phase_hysteresis_m": task_stop_phase_hysteresis_m,
+                "enable_slalom": enable_slalom,
+                "slalom_plan_json": slalom_plan_json,
+                "slalom_start_side": slalom_start_side,
+                "slalom_clearance_m": slalom_clearance_m,
+                "slalom_speed_mps": slalom_speed_mps,
+                "slalom_activation_horizon_m": slalom_activation_horizon_m,
+                "slalom_route_corridor_m": slalom_route_corridor_m,
             }.items(),
         ),
 

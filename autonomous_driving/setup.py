@@ -38,6 +38,7 @@ setup(
             'mission_route_manager_node = teknofest_planning.mission_route_manager_node:main',
             'global_route_planner_node = teknofest_planning.global_route_planner_node:main',
             'route_sampler_node = teknofest_planning.route_sampler_node:main',
+            'slalom_overlay_node = teknofest_planning.slalom_overlay_node:main',
             'route_event_analyzer_node = teknofest_planning.route_event_analyzer_node:main',
             'lane_follower_node = teknofest_planning.lane_follower_node:main',
             'control_node = teknofest_control.control_node:main',

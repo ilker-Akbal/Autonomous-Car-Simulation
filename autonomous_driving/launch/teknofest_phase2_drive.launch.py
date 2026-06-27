@@ -19,6 +19,7 @@ def generate_launch_description():
         default_mission_geojson = package_root / "missions" / "teknofest_round3.geojson"
     default_sign_plan_geojson = package_root / "missions" / "town03_competition_v4_sign_plan.geojson"
     default_sign_plan_json = package_root / "missions" / "town03_competition_v4_sign_plan.json"
+    default_slalom_plan_json = package_root / "config" / "town03_round3_slalom_plan.json"
     # Phase 1 sensor args (lite defaults)
     zed_enabled = LaunchConfiguration("zed_enabled")
     depth_enabled = LaunchConfiguration("depth_enabled")
@@ -201,6 +202,13 @@ def generate_launch_description():
     enable_phase2_drive = LaunchConfiguration("enable_phase2_drive")
     max_throttle = LaunchConfiguration("max_throttle")
     max_brake = LaunchConfiguration("max_brake")
+    enable_slalom = LaunchConfiguration("enable_slalom")
+    slalom_plan_json = LaunchConfiguration("slalom_plan_json")
+    slalom_start_side = LaunchConfiguration("slalom_start_side")
+    slalom_clearance_m = LaunchConfiguration("slalom_clearance_m")
+    slalom_speed_mps = LaunchConfiguration("slalom_speed_mps")
+    slalom_activation_horizon_m = LaunchConfiguration("slalom_activation_horizon_m")
+    slalom_route_corridor_m = LaunchConfiguration("slalom_route_corridor_m")
 
 
     # Phase 2B tuning LaunchConfigurations
@@ -293,6 +301,13 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_phase2_drive", default_value="true"),
         DeclareLaunchArgument("max_throttle", default_value="0.45"),
         DeclareLaunchArgument("max_brake", default_value="0.75"),
+        DeclareLaunchArgument("enable_slalom", default_value="false"),
+        DeclareLaunchArgument("slalom_plan_json", default_value=str(default_slalom_plan_json)),
+        DeclareLaunchArgument("slalom_start_side", default_value="right"),
+        DeclareLaunchArgument("slalom_clearance_m", default_value="1.5"),
+        DeclareLaunchArgument("slalom_speed_mps", default_value="1.6"),
+        DeclareLaunchArgument("slalom_activation_horizon_m", default_value="80.0"),
+        DeclareLaunchArgument("slalom_route_corridor_m", default_value="6.0"),
 
         DeclareLaunchArgument(
             "carla_root",
@@ -575,6 +590,32 @@ def generate_launch_description():
                         "local_route_horizon_m": ParameterValue(local_route_horizon_m, value_type=float),
                         "min_route_points": ParameterValue(min_route_points, value_type=int),
                         "rate_hz": 5.0,
+                    }],
+                    remappings=[
+                        ("/adas/planning/route", "/adas/planning/route_base"),
+                        ("/adas/planning/route_debug", "/adas/planning/route_base_debug"),
+                    ],
+                ),
+                Node(
+                    package="autonomous_driving",
+                    executable="slalom_overlay_node",
+                    name="slalom_overlay",
+                    output="screen",
+                    condition=IfCondition(enable_phase2_drive),
+                    parameters=[{
+                        "enable_slalom": ParameterValue(enable_slalom, value_type=bool),
+                        "slalom_plan_json": ParameterValue(slalom_plan_json, value_type=str),
+                        "slalom_start_side": ParameterValue(slalom_start_side, value_type=str),
+                        "slalom_clearance_m": ParameterValue(slalom_clearance_m, value_type=float),
+                        "slalom_speed_mps": ParameterValue(slalom_speed_mps, value_type=float),
+                        "slalom_activation_horizon_m": ParameterValue(
+                            slalom_activation_horizon_m,
+                            value_type=float,
+                        ),
+                        "slalom_route_corridor_m": ParameterValue(
+                            slalom_route_corridor_m,
+                            value_type=float,
+                        ),
                     }],
                 ),
             ],
