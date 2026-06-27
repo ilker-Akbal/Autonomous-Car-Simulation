@@ -40,7 +40,7 @@
         "task_stop_source": "raw_editor_vehicle_pose",
         "task_stop_side": "right",
         "task_stop_x": 115.6,
-        "task_stop_y": -9.8,
+        "task_stop_y": -10.2,
         "task_stop_z": 0.0,
         "task_stop_yaw": 180.000198,
         "kind": "pickup"
@@ -70,8 +70,8 @@
         "task_stop_mode": "pull_over_pose",
         "task_stop_source": "raw_editor_vehicle_pose",
         "task_stop_side": "right",
-        "task_stop_x": 229.0,
-        "task_stop_y": -24.5,
+        "task_stop_x": 235.372175,
+        "task_stop_y": -30.978161,
         "task_stop_z": 0.0,
         "task_stop_yaw": 90.0001,
         "kind": "dropoff"

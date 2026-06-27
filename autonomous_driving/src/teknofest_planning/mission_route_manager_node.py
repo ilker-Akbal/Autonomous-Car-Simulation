@@ -28,7 +28,19 @@ class MissionRouteManager(Node):
         self.declare_parameter("front_bumper_offset_m", 2.0)
         self.declare_parameter("task_stop_position_tolerance_m", 1.0)
         self.declare_parameter("task_stop_front_tolerance_m", 1.0)
-        self.declare_parameter("task_stop_yaw_tolerance_deg", 12.0)
+        self.declare_parameter("task_stop_yaw_tolerance_deg", 16.0)
+        self.declare_parameter("task_stop_close_enough_distance_m", 0.5)
+        self.declare_parameter("task_stop_close_enough_ignore_yaw", True)
+        self.declare_parameter("task_stop_close_enough_max_yaw_error_deg", 25.0)
+        self.declare_parameter("task_stop_completion_yaw_tolerance_deg", 14.0)
+        self.declare_parameter("task_stop_completion_position_tolerance_m", 0.75)
+        self.declare_parameter("task_stop_use_side_projection", False)
+        self.declare_parameter("task_stop_side_projection_lateral_m", 2.2)
+        self.declare_parameter("task_stop_side_projection_forward_m", 0.0)
+        self.declare_parameter("task_stop_side_projection_clamp_to_road", True)
+        self.declare_parameter("task_stop_raw_override_enabled", True)
+        self.declare_parameter("task_stop_min_road_edge_clearance_m", 0.4)
+        self.declare_parameter("task_stop_max_side_projection_m", 3.0)
         self.declare_parameter("task_pull_over_lateral_offset_m", 1.0)
         self.declare_parameter("task_pull_over_hold_requires_effective_stop", True)
         self.declare_parameter("pickup_hold_s", 16.0)
@@ -51,6 +63,42 @@ class MissionRouteManager(Node):
         )
         self.task_stop_yaw_tolerance_deg = float(
             self.get_parameter("task_stop_yaw_tolerance_deg").value
+        )
+        self.task_stop_close_enough_distance_m = float(
+            self.get_parameter("task_stop_close_enough_distance_m").value
+        )
+        self.task_stop_close_enough_ignore_yaw = bool(
+            self.get_parameter("task_stop_close_enough_ignore_yaw").value
+        )
+        self.task_stop_close_enough_max_yaw_error_deg = float(
+            self.get_parameter("task_stop_close_enough_max_yaw_error_deg").value
+        )
+        self.task_stop_completion_yaw_tolerance_deg = float(
+            self.get_parameter("task_stop_completion_yaw_tolerance_deg").value
+        )
+        self.task_stop_completion_position_tolerance_m = float(
+            self.get_parameter("task_stop_completion_position_tolerance_m").value
+        )
+        self.task_stop_use_side_projection = bool(
+            self.get_parameter("task_stop_use_side_projection").value
+        )
+        self.task_stop_side_projection_lateral_m = float(
+            self.get_parameter("task_stop_side_projection_lateral_m").value
+        )
+        self.task_stop_side_projection_forward_m = float(
+            self.get_parameter("task_stop_side_projection_forward_m").value
+        )
+        self.task_stop_side_projection_clamp_to_road = bool(
+            self.get_parameter("task_stop_side_projection_clamp_to_road").value
+        )
+        self.task_stop_raw_override_enabled = bool(
+            self.get_parameter("task_stop_raw_override_enabled").value
+        )
+        self.task_stop_min_road_edge_clearance_m = float(
+            self.get_parameter("task_stop_min_road_edge_clearance_m").value
+        )
+        self.task_stop_max_side_projection_m = float(
+            self.get_parameter("task_stop_max_side_projection_m").value
         )
         self.task_pull_over_lateral_offset_m = float(
             self.get_parameter("task_pull_over_lateral_offset_m").value
@@ -237,46 +285,153 @@ class MissionRouteManager(Node):
         base_y = target.get("carla_y", target.get("y"))
         base_z = target.get("carla_z", target.get("z"))
         base_yaw = target.get("carla_yaw")
+        raw_x = target.get("task_stop_x")
+        raw_y = target.get("task_stop_y")
+        raw_yaw = target.get("task_stop_yaw", base_yaw)
+        task_stop_side = target.get("task_stop_side")
         if base_x is None or base_y is None:
             return {
                 "base_goal_x": base_x,
                 "base_goal_y": base_y,
                 "base_goal_yaw": base_yaw,
+                "raw_task_stop_x": raw_x,
+                "raw_task_stop_y": raw_y,
                 "effective_task_stop_x": None,
                 "effective_task_stop_y": None,
                 "effective_task_stop_z": base_z,
-                "effective_task_stop_yaw": base_yaw,
+                "effective_task_stop_yaw": raw_yaw,
                 "effective_task_stop_source": "missing_base_goal",
+                "task_stop_projection_enabled": False,
+                "task_stop_projection_reason": "missing_base_goal",
+                "task_stop_projection_lateral_m": None,
+                "task_stop_projection_forward_m": None,
+                "task_stop_on_road": None,
+                "task_stop_road_id": target.get("road_id"),
+                "task_stop_lane_id": target.get("lane_id"),
+                "distance_to_road_edge_m": None,
             }
 
-        raw_x = target.get("task_stop_x")
-        raw_y = target.get("task_stop_y")
-        raw_yaw = target.get("task_stop_yaw", base_yaw)
-        if raw_x is not None and raw_y is not None:
+        side = str(task_stop_side or "").lower()
+        side_projection_requested = (
+            self.task_stop_use_side_projection
+            and side in ("right", "left")
+        )
+        if raw_x is not None and raw_y is not None and not side_projection_requested:
             return {
                 "base_goal_x": base_x,
                 "base_goal_y": base_y,
                 "base_goal_yaw": base_yaw,
+                "raw_task_stop_x": float(raw_x),
+                "raw_task_stop_y": float(raw_y),
                 "effective_task_stop_x": float(raw_x),
                 "effective_task_stop_y": float(raw_y),
                 "effective_task_stop_z": target.get("task_stop_z", base_z),
                 "effective_task_stop_yaw": raw_yaw,
                 "effective_task_stop_source": "geojson_task_stop",
+                "task_stop_projection_enabled": False,
+                "task_stop_projection_reason": "raw_geojson_task_stop",
+                "task_stop_projection_lateral_m": None,
+                "task_stop_projection_forward_m": None,
+                "task_stop_on_road": None,
+                "task_stop_road_id": target.get("road_id"),
+                "task_stop_lane_id": target.get("lane_id"),
+                "distance_to_road_edge_m": None,
             }
 
         yaw_for_offset = float(base_yaw if base_yaw is not None else 0.0)
         yaw_rad = math.radians(yaw_for_offset)
-        effective_x = float(base_x) + math.sin(yaw_rad) * self.task_pull_over_lateral_offset_m
-        effective_y = float(base_y) - math.cos(yaw_rad) * self.task_pull_over_lateral_offset_m
+        lateral_m = self.task_pull_over_lateral_offset_m
+        forward_m = 0.0
+        projection_enabled = False
+        projection_reason = "computed_pull_over"
+        if side_projection_requested and not self.task_stop_raw_override_enabled:
+            projection_enabled = True
+            requested_lateral_m = target.get(
+                "task_stop_side_lateral_m",
+                self.task_stop_side_projection_lateral_m,
+            )
+            try:
+                lateral_m = abs(float(requested_lateral_m))
+            except Exception:
+                lateral_m = abs(self.task_stop_side_projection_lateral_m)
+            max_projection_m = max(0.0, self.task_stop_max_side_projection_m)
+            if self.task_stop_side_projection_clamp_to_road:
+                max_projection_m = max(
+                    0.0,
+                    max_projection_m - max(0.0, self.task_stop_min_road_edge_clearance_m),
+                )
+            lateral_m = min(lateral_m, max_projection_m)
+            forward_m = self.task_stop_side_projection_forward_m
+            projection_reason = f"{side}_side_projection"
+        elif raw_x is not None and raw_y is not None:
+            return {
+                "base_goal_x": base_x,
+                "base_goal_y": base_y,
+                "base_goal_yaw": base_yaw,
+                "raw_task_stop_x": float(raw_x),
+                "raw_task_stop_y": float(raw_y),
+                "effective_task_stop_x": float(raw_x),
+                "effective_task_stop_y": float(raw_y),
+                "effective_task_stop_z": target.get("task_stop_z", base_z),
+                "effective_task_stop_yaw": raw_yaw,
+                "effective_task_stop_source": "geojson_task_stop_raw_override",
+                "task_stop_projection_enabled": False,
+                "task_stop_projection_reason": "raw_override_enabled",
+                "task_stop_projection_lateral_m": None,
+                "task_stop_projection_forward_m": None,
+                "task_stop_on_road": None,
+                "task_stop_road_id": target.get("road_id"),
+                "task_stop_lane_id": target.get("lane_id"),
+                "distance_to_road_edge_m": None,
+            }
+
+        side_sign = 1.0
+        if side == "left":
+            side_sign = -1.0
+        right_x = math.sin(yaw_rad)
+        right_y = -math.cos(yaw_rad)
+        forward_x = math.cos(yaw_rad)
+        forward_y = math.sin(yaw_rad)
+        effective_x = (
+            float(base_x)
+            + forward_x * forward_m
+            + right_x * lateral_m * side_sign
+        )
+        effective_y = (
+            float(base_y)
+            + forward_y * forward_m
+            + right_y * lateral_m * side_sign
+        )
+        distance_to_road_edge_m = max(
+            0.0,
+            self.task_stop_max_side_projection_m - abs(lateral_m),
+        )
         return {
             "base_goal_x": float(base_x),
             "base_goal_y": float(base_y),
             "base_goal_yaw": base_yaw,
+            "raw_task_stop_x": float(raw_x) if raw_x is not None else None,
+            "raw_task_stop_y": float(raw_y) if raw_y is not None else None,
             "effective_task_stop_x": effective_x,
             "effective_task_stop_y": effective_y,
-            "effective_task_stop_z": base_z,
-            "effective_task_stop_yaw": base_yaw,
-            "effective_task_stop_source": "computed_pull_over",
+            "effective_task_stop_z": target.get("task_stop_z", base_z),
+            "effective_task_stop_yaw": raw_yaw,
+            "effective_task_stop_source": (
+                "side_projected_task_stop"
+                if projection_enabled
+                else "computed_pull_over"
+            ),
+            "task_stop_projection_enabled": projection_enabled,
+            "task_stop_projection_reason": projection_reason,
+            "task_stop_projection_lateral_m": lateral_m,
+            "task_stop_projection_forward_m": forward_m,
+            "task_stop_on_road": bool(
+                not self.task_stop_side_projection_clamp_to_road
+                or lateral_m <= self.task_stop_max_side_projection_m
+            ),
+            "task_stop_road_id": target.get("road_id"),
+            "task_stop_lane_id": target.get("lane_id"),
+            "distance_to_road_edge_m": round(distance_to_road_edge_m, 3),
         }
 
     def _target_yaw_error_deg(self, target: dict[str, Any]) -> Optional[float]:
@@ -315,19 +470,96 @@ class MissionRouteManager(Node):
         center_distance_m: Optional[float],
         yaw_error_deg: Optional[float] = None,
     ) -> bool:
-        front_reached = (
+        return bool(
+            self._task_stop_reached_result(
+                front_bumper_distance_m,
+                center_distance_m,
+                yaw_error_deg,
+            )["reached"]
+        )
+
+    def _task_stop_reached_result(
+        self,
+        front_bumper_distance_m: Optional[float],
+        center_distance_m: Optional[float],
+        yaw_error_deg: Optional[float] = None,
+    ) -> dict[str, Any]:
+        distances = [
+            float(d)
+            for d in (front_bumper_distance_m, center_distance_m)
+            if d is not None
+        ]
+        min_distance_m = min(distances) if distances else None
+        front_within_stop_tolerance = (
             front_bumper_distance_m is not None
             and front_bumper_distance_m <= self.task_stop_front_tolerance_m
         )
-        center_reached = (
+        center_within_stop_tolerance = (
             center_distance_m is not None
             and center_distance_m <= self.task_stop_position_tolerance_m
         )
-        yaw_reached = (
+        yaw_within_stop_tolerance = (
             yaw_error_deg is None
             or yaw_error_deg <= self.task_stop_yaw_tolerance_deg
         )
-        return (front_reached or center_reached) and yaw_reached
+        completion_position_ok = (
+            min_distance_m is not None
+            and min_distance_m <= self.task_stop_completion_position_tolerance_m
+        )
+        completion_yaw_ok = (
+            yaw_error_deg is None
+            or yaw_error_deg <= self.task_stop_completion_yaw_tolerance_deg
+        )
+        close_enough_distance_reached = (
+            min_distance_m is not None
+            and min_distance_m <= self.task_stop_close_enough_distance_m
+        )
+        close_enough_yaw_allowed = (
+            yaw_error_deg is None
+            or yaw_error_deg <= self.task_stop_close_enough_max_yaw_error_deg
+        )
+        close_enough_reached = (
+            self.task_stop_close_enough_ignore_yaw
+            and close_enough_distance_reached
+            and close_enough_yaw_allowed
+        )
+        safety_hold_active = (
+            close_enough_reached
+            and not (completion_position_ok and completion_yaw_ok)
+        )
+
+        if completion_position_ok and completion_yaw_ok:
+            reached = True
+            reason = "position_and_yaw"
+        elif safety_hold_active:
+            reached = False
+            reason = "safety_hold_yaw_not_aligned"
+        elif not completion_position_ok:
+            reached = False
+            reason = "not_reached_distance"
+        elif not completion_yaw_ok:
+            reached = False
+            reason = "not_reached_yaw_error"
+        else:
+            reached = False
+            reason = "not_reached_distance"
+
+        return {
+            "reached": reached,
+            "reason": reason,
+            "position_reached": completion_position_ok,
+            "yaw_reached": completion_yaw_ok,
+            "front_within_stop_tolerance": front_within_stop_tolerance,
+            "center_within_stop_tolerance": center_within_stop_tolerance,
+            "yaw_within_stop_tolerance": yaw_within_stop_tolerance,
+            "completion_position_ok": completion_position_ok,
+            "completion_yaw_ok": completion_yaw_ok,
+            "close_enough_reached": close_enough_reached,
+            "close_enough_distance_reached": close_enough_distance_reached,
+            "close_enough_yaw_allowed": close_enough_yaw_allowed,
+            "safety_hold_active": safety_hold_active,
+            "min_distance_m": min_distance_m,
+        }
 
     def _hold_duration_for_target(self, target: dict[str, Any]) -> tuple[float, Optional[str]]:
         kind = str(target.get("kind", target.get("role", "")))
@@ -370,14 +602,37 @@ class MissionRouteManager(Node):
             "task_stop_yaw_error_deg": None,
             "task_stop_yaw_within_tolerance": None,
             "task_stop_yaw_tolerance_deg": self.task_stop_yaw_tolerance_deg,
+            "task_stop_completion_yaw_tolerance_deg": self.task_stop_completion_yaw_tolerance_deg,
+            "task_stop_completion_position_tolerance_m": self.task_stop_completion_position_tolerance_m,
+            "task_stop_completion_yaw_ok": None,
+            "task_stop_completion_position_ok": False,
+            "task_stop_close_enough_distance_m": self.task_stop_close_enough_distance_m,
+            "task_stop_close_enough_ignore_yaw": self.task_stop_close_enough_ignore_yaw,
+            "task_stop_close_enough_max_yaw_error_deg": self.task_stop_close_enough_max_yaw_error_deg,
+            "task_stop_close_enough_reached": False,
+            "task_stop_safety_hold_active": False,
+            "task_stop_safety_hold_reason": None,
+            "task_stop_reached": False,
+            "task_stop_reached_reason": None,
+            "task_stop_distance_m": None,
             "base_goal_x": None,
             "base_goal_y": None,
             "base_goal_yaw": None,
+            "raw_task_stop_x": None,
+            "raw_task_stop_y": None,
             "effective_task_stop_x": None,
             "effective_task_stop_y": None,
             "effective_task_stop_z": None,
             "effective_task_stop_yaw": None,
             "effective_task_stop_source": None,
+            "task_stop_projection_enabled": False,
+            "task_stop_projection_reason": None,
+            "task_stop_projection_lateral_m": None,
+            "task_stop_projection_forward_m": None,
+            "task_stop_on_road": None,
+            "task_stop_road_id": None,
+            "task_stop_lane_id": None,
+            "distance_to_road_edge_m": None,
             "center_distance_to_effective_task_stop_m": None,
             "front_bumper_distance_to_effective_task_stop_m": None,
             "task_stop_reached_by_mission": False,
@@ -435,15 +690,21 @@ class MissionRouteManager(Node):
                     if center is not None
                     else None
                 )
-            task_reached = (
-                self._task_stop_reached(
+            task_reached_result = (
+                self._task_stop_reached_result(
                     effective_front_distance,
                     effective_center_distance,
                     task_yaw_error,
                 )
                 if task_pull_over
-                else False
+                else {
+                    "reached": False,
+                    "reason": None,
+                    "close_enough_reached": False,
+                    "min_distance_m": None,
+                }
             )
+            task_reached = bool(task_reached_result["reached"])
             hold_requires_effective = task_pull_over and self.task_pull_over_hold_requires_effective_stop
             target_reached = (
                 task_reached
@@ -452,19 +713,14 @@ class MissionRouteManager(Node):
             )
             hold_block_reason = None
             if hold_requires_effective and not task_reached:
-                distance_reached_for_debug = self._task_stop_reached(
-                    effective_front_distance,
-                    effective_center_distance,
-                    None,
-                )
-                yaw_ok_for_debug = (
-                    task_yaw_error is None
-                    or task_yaw_error <= self.task_stop_yaw_tolerance_deg
-                )
-                if distance_reached_for_debug and not yaw_ok_for_debug:
+                if task_reached_result.get("reason") in (
+                    "not_reached_yaw_error",
+                    "safety_hold_yaw_not_aligned",
+                ):
                     hold_block_reason = "task_stop_yaw_not_aligned"
                 else:
                     hold_block_reason = "effective_task_stop_not_reached"
+            task_stop_distance_m = task_reached_result.get("min_distance_m")
             state.update(
                 {
                     "front_bumper_distance_m": round(front_distance, 3) if front_distance is not None else None,
@@ -487,6 +743,35 @@ class MissionRouteManager(Node):
                         else None
                     ),
                     "task_stop_yaw_tolerance_deg": self.task_stop_yaw_tolerance_deg,
+                    "task_stop_completion_yaw_tolerance_deg": self.task_stop_completion_yaw_tolerance_deg,
+                    "task_stop_completion_position_tolerance_m": self.task_stop_completion_position_tolerance_m,
+                    "task_stop_completion_yaw_ok": task_reached_result.get(
+                        "completion_yaw_ok"
+                    ),
+                    "task_stop_completion_position_ok": bool(
+                        task_reached_result.get("completion_position_ok", False)
+                    ),
+                    "task_stop_close_enough_distance_m": self.task_stop_close_enough_distance_m,
+                    "task_stop_close_enough_ignore_yaw": self.task_stop_close_enough_ignore_yaw,
+                    "task_stop_close_enough_max_yaw_error_deg": self.task_stop_close_enough_max_yaw_error_deg,
+                    "task_stop_close_enough_reached": bool(
+                        task_reached_result.get("close_enough_reached", False)
+                    ),
+                    "task_stop_safety_hold_active": bool(
+                        task_reached_result.get("safety_hold_active", False)
+                    ),
+                    "task_stop_safety_hold_reason": (
+                        "safety_hold_yaw_not_aligned"
+                        if task_reached_result.get("safety_hold_active", False)
+                        else None
+                    ),
+                    "task_stop_reached": task_reached,
+                    "task_stop_reached_reason": task_reached_result.get("reason"),
+                    "task_stop_distance_m": (
+                        round(task_stop_distance_m, 3)
+                        if task_stop_distance_m is not None
+                        else None
+                    ),
                     **effective_pose,
                     "center_distance_to_effective_task_stop_m": (
                         round(effective_center_distance, 3)
@@ -578,14 +863,38 @@ class MissionRouteManager(Node):
                 "base_goal_x": None,
                 "base_goal_y": None,
                 "base_goal_yaw": None,
+                "raw_task_stop_x": None,
+                "raw_task_stop_y": None,
                 "effective_task_stop_x": None,
                 "effective_task_stop_y": None,
                 "effective_task_stop_z": None,
                 "effective_task_stop_yaw": None,
                 "effective_task_stop_source": None,
+                "task_stop_projection_enabled": False,
+                "task_stop_projection_reason": None,
+                "task_stop_projection_lateral_m": None,
+                "task_stop_projection_forward_m": None,
+                "task_stop_side_lateral_m": None,
+                "task_stop_on_road": None,
+                "task_stop_road_id": None,
+                "task_stop_lane_id": None,
+                "distance_to_road_edge_m": None,
                 "task_stop_yaw_error_deg": None,
                 "task_stop_yaw_within_tolerance": None,
                 "task_stop_yaw_tolerance_deg": self.task_stop_yaw_tolerance_deg,
+                "task_stop_completion_yaw_tolerance_deg": self.task_stop_completion_yaw_tolerance_deg,
+                "task_stop_completion_position_tolerance_m": self.task_stop_completion_position_tolerance_m,
+                "task_stop_completion_yaw_ok": None,
+                "task_stop_completion_position_ok": False,
+                "task_stop_close_enough_distance_m": self.task_stop_close_enough_distance_m,
+                "task_stop_close_enough_ignore_yaw": self.task_stop_close_enough_ignore_yaw,
+                "task_stop_close_enough_max_yaw_error_deg": self.task_stop_close_enough_max_yaw_error_deg,
+                "task_stop_close_enough_reached": False,
+                "task_stop_safety_hold_active": False,
+                "task_stop_safety_hold_reason": None,
+                "task_stop_reached": False,
+                "task_stop_reached_reason": None,
+                "task_stop_distance_m": None,
                 "center_distance_to_effective_task_stop_m": None,
                 "front_bumper_distance_to_effective_task_stop_m": None,
                 "task_stop_reached_by_mission": False,
@@ -639,6 +948,10 @@ class MissionRouteManager(Node):
             "task_stop_z": current_goal.get("task_stop_z", current_goal.get("carla_z")),
             "task_stop_yaw": current_goal.get("task_stop_yaw", current_goal.get("carla_yaw")),
             "task_stop_side": task_stop_side,
+            "task_stop_side_lateral_m": current_goal.get(
+                "task_stop_side_lateral_m",
+                self.task_stop_side_projection_lateral_m,
+            ) if task_stop_required else None,
             "task_stop_mode": task_stop_mode,
             "task_stop_source": task_stop_source,
             "task_hold_s": task_hold_s if task_stop_required else None,
@@ -659,6 +972,44 @@ class MissionRouteManager(Node):
                 "task_stop_yaw_within_tolerance"
             ),
             "task_stop_yaw_tolerance_deg": self.task_stop_yaw_tolerance_deg,
+            "task_stop_completion_yaw_tolerance_deg": mission_stop_state.get(
+                "task_stop_completion_yaw_tolerance_deg",
+                self.task_stop_completion_yaw_tolerance_deg,
+            ),
+            "task_stop_completion_position_tolerance_m": mission_stop_state.get(
+                "task_stop_completion_position_tolerance_m",
+                self.task_stop_completion_position_tolerance_m,
+            ),
+            "task_stop_completion_yaw_ok": mission_stop_state.get(
+                "task_stop_completion_yaw_ok"
+            ),
+            "task_stop_completion_position_ok": bool(
+                mission_stop_state.get("task_stop_completion_position_ok", False)
+            ),
+            "task_stop_close_enough_distance_m": mission_stop_state.get(
+                "task_stop_close_enough_distance_m",
+                self.task_stop_close_enough_distance_m,
+            ),
+            "task_stop_close_enough_ignore_yaw": mission_stop_state.get(
+                "task_stop_close_enough_ignore_yaw",
+                self.task_stop_close_enough_ignore_yaw,
+            ),
+            "task_stop_close_enough_max_yaw_error_deg": mission_stop_state.get(
+                "task_stop_close_enough_max_yaw_error_deg",
+                self.task_stop_close_enough_max_yaw_error_deg,
+            ),
+            "task_stop_close_enough_reached": bool(
+                mission_stop_state.get("task_stop_close_enough_reached", False)
+            ),
+            "task_stop_safety_hold_active": bool(
+                mission_stop_state.get("task_stop_safety_hold_active", False)
+            ),
+            "task_stop_safety_hold_reason": mission_stop_state.get(
+                "task_stop_safety_hold_reason"
+            ),
+            "task_stop_reached": bool(mission_stop_state.get("task_stop_reached", False)),
+            "task_stop_reached_reason": mission_stop_state.get("task_stop_reached_reason"),
+            "task_stop_distance_m": mission_stop_state.get("task_stop_distance_m"),
             "task_stop_reached_by_mission": task_stop_reached_by_mission,
             "mission_hold_start_allowed": bool(
                 mission_stop_state.get("mission_hold_start_allowed", False)

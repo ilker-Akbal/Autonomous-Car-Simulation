@@ -70,6 +70,21 @@ def generate_launch_description():
     task_pull_over_final_distance_m = LaunchConfiguration("task_pull_over_final_distance_m")
     task_pull_over_lateral_offset_m = LaunchConfiguration("task_pull_over_lateral_offset_m")
     task_stop_reached_distance_m = LaunchConfiguration("task_stop_reached_distance_m")
+    task_stop_final_phase_latch_enabled = LaunchConfiguration("task_stop_final_phase_latch_enabled")
+    task_stop_final_latch_distance_m = LaunchConfiguration("task_stop_final_latch_distance_m")
+    task_stop_overshoot_guard_distance_m = LaunchConfiguration("task_stop_overshoot_guard_distance_m")
+    task_stop_overshoot_guard_speed_mps = LaunchConfiguration("task_stop_overshoot_guard_speed_mps")
+    task_stop_alignment_enabled = LaunchConfiguration("task_stop_alignment_enabled")
+    task_stop_alignment_start_distance_m = LaunchConfiguration("task_stop_alignment_start_distance_m")
+    task_stop_alignment_yaw_tolerance_deg = LaunchConfiguration("task_stop_alignment_yaw_tolerance_deg")
+    task_stop_alignment_speed_mps = LaunchConfiguration("task_stop_alignment_speed_mps")
+    task_stop_alignment_target_ahead_m = LaunchConfiguration("task_stop_alignment_target_ahead_m")
+    task_stop_approach_cruise_speed_mps = LaunchConfiguration("task_stop_approach_cruise_speed_mps")
+    task_stop_pre_align_speed_mps = LaunchConfiguration("task_stop_pre_align_speed_mps")
+    task_stop_final_align_speed_mps = LaunchConfiguration("task_stop_final_align_speed_mps")
+    task_stop_min_creep_speed_mps = LaunchConfiguration("task_stop_min_creep_speed_mps")
+    task_stop_no_stop_before_final_distance_m = LaunchConfiguration("task_stop_no_stop_before_final_distance_m")
+    task_stop_phase_hysteresis_m = LaunchConfiguration("task_stop_phase_hysteresis_m")
     task_pull_over_approach_speed_mps = LaunchConfiguration("task_pull_over_approach_speed_mps")
     task_pull_over_final_speed_mps = LaunchConfiguration("task_pull_over_final_speed_mps")
     task_pull_over_crawl_speed_mps = LaunchConfiguration("task_pull_over_crawl_speed_mps")
@@ -119,6 +134,10 @@ def generate_launch_description():
     red_detection_horizon_m = LaunchConfiguration("red_detection_horizon_m")
     red_approach_distance_m = LaunchConfiguration("red_approach_distance_m")
     red_stop_distance_m = LaunchConfiguration("red_stop_distance_m")
+    red_stop_trigger_base_m = LaunchConfiguration("red_stop_trigger_base_m")
+    red_stop_trigger_max_m = LaunchConfiguration("red_stop_trigger_max_m")
+    red_stop_trigger_speed_gain_s = LaunchConfiguration("red_stop_trigger_speed_gain_s")
+    red_stop_trigger_speed_buffer_m = LaunchConfiguration("red_stop_trigger_speed_buffer_m")
     red_creep_distance_m = LaunchConfiguration("red_creep_distance_m")
     red_approach_speed_mps = LaunchConfiguration("red_approach_speed_mps")
     red_creep_speed_mps = LaunchConfiguration("red_creep_speed_mps")
@@ -150,6 +169,9 @@ def generate_launch_description():
     yellow_pass_time_s = LaunchConfiguration("yellow_pass_time_s")
     stopped_vehicle_speed_mps = LaunchConfiguration("stopped_vehicle_speed_mps")
     stopped_vehicle_stop_distance_m = LaunchConfiguration("stopped_vehicle_stop_distance_m")
+    red_approach_hard_stop_distance_m = LaunchConfiguration(
+        "red_approach_hard_stop_distance_m"
+    )
     mission_geojson = LaunchConfiguration("mission_geojson")
     target_reached_distance_m = LaunchConfiguration("target_reached_distance_m")
     mission_position_tolerance_m = LaunchConfiguration("mission_position_tolerance_m")
@@ -158,6 +180,18 @@ def generate_launch_description():
     task_stop_position_tolerance_m = LaunchConfiguration("task_stop_position_tolerance_m")
     task_stop_front_tolerance_m = LaunchConfiguration("task_stop_front_tolerance_m")
     task_stop_yaw_tolerance_deg = LaunchConfiguration("task_stop_yaw_tolerance_deg")
+    task_stop_close_enough_distance_m = LaunchConfiguration("task_stop_close_enough_distance_m")
+    task_stop_close_enough_ignore_yaw = LaunchConfiguration("task_stop_close_enough_ignore_yaw")
+    task_stop_close_enough_max_yaw_error_deg = LaunchConfiguration("task_stop_close_enough_max_yaw_error_deg")
+    task_stop_completion_yaw_tolerance_deg = LaunchConfiguration("task_stop_completion_yaw_tolerance_deg")
+    task_stop_completion_position_tolerance_m = LaunchConfiguration("task_stop_completion_position_tolerance_m")
+    task_stop_use_side_projection = LaunchConfiguration("task_stop_use_side_projection")
+    task_stop_side_projection_lateral_m = LaunchConfiguration("task_stop_side_projection_lateral_m")
+    task_stop_side_projection_forward_m = LaunchConfiguration("task_stop_side_projection_forward_m")
+    task_stop_side_projection_clamp_to_road = LaunchConfiguration("task_stop_side_projection_clamp_to_road")
+    task_stop_raw_override_enabled = LaunchConfiguration("task_stop_raw_override_enabled")
+    task_stop_min_road_edge_clearance_m = LaunchConfiguration("task_stop_min_road_edge_clearance_m")
+    task_stop_max_side_projection_m = LaunchConfiguration("task_stop_max_side_projection_m")
     task_pull_over_hold_requires_effective_stop = LaunchConfiguration("task_pull_over_hold_requires_effective_stop")
     pickup_hold_s = LaunchConfiguration("pickup_hold_s")
     dropoff_hold_s = LaunchConfiguration("dropoff_hold_s")
@@ -232,6 +266,21 @@ def generate_launch_description():
         DeclareLaunchArgument("task_pull_over_final_distance_m", default_value="5.0"),
         DeclareLaunchArgument("task_pull_over_lateral_offset_m", default_value="1.0"),
         DeclareLaunchArgument("task_stop_reached_distance_m", default_value="2.0"),
+        DeclareLaunchArgument("task_stop_final_phase_latch_enabled", default_value="true"),
+        DeclareLaunchArgument("task_stop_final_latch_distance_m", default_value="1.0"),
+        DeclareLaunchArgument("task_stop_overshoot_guard_distance_m", default_value="0.75"),
+        DeclareLaunchArgument("task_stop_overshoot_guard_speed_mps", default_value="0.0"),
+        DeclareLaunchArgument("task_stop_alignment_enabled", default_value="true"),
+        DeclareLaunchArgument("task_stop_alignment_start_distance_m", default_value="3.0"),
+        DeclareLaunchArgument("task_stop_alignment_yaw_tolerance_deg", default_value="12.0"),
+        DeclareLaunchArgument("task_stop_alignment_speed_mps", default_value="0.8"),
+        DeclareLaunchArgument("task_stop_alignment_target_ahead_m", default_value="2.0"),
+        DeclareLaunchArgument("task_stop_approach_cruise_speed_mps", default_value="2.0"),
+        DeclareLaunchArgument("task_stop_pre_align_speed_mps", default_value="1.2"),
+        DeclareLaunchArgument("task_stop_final_align_speed_mps", default_value="0.8"),
+        DeclareLaunchArgument("task_stop_min_creep_speed_mps", default_value="0.6"),
+        DeclareLaunchArgument("task_stop_no_stop_before_final_distance_m", default_value="1.0"),
+        DeclareLaunchArgument("task_stop_phase_hysteresis_m", default_value="0.75"),
         DeclareLaunchArgument("task_pull_over_approach_speed_mps", default_value="2.0"),
         DeclareLaunchArgument("task_pull_over_final_speed_mps", default_value="1.2"),
         DeclareLaunchArgument("task_pull_over_crawl_speed_mps", default_value="0.6"),
@@ -292,6 +341,10 @@ def generate_launch_description():
         DeclareLaunchArgument("red_detection_horizon_m", default_value="60.0"),
         DeclareLaunchArgument("red_approach_distance_m", default_value="45.0"),
         DeclareLaunchArgument("red_stop_distance_m", default_value="8.0"),
+        DeclareLaunchArgument("red_stop_trigger_base_m", default_value="1.5"),
+        DeclareLaunchArgument("red_stop_trigger_max_m", default_value="3.0"),
+        DeclareLaunchArgument("red_stop_trigger_speed_gain_s", default_value="0.6"),
+        DeclareLaunchArgument("red_stop_trigger_speed_buffer_m", default_value="0.8"),
         DeclareLaunchArgument("red_creep_distance_m", default_value="3.0"),
         DeclareLaunchArgument("red_approach_speed_mps", default_value="2.0"),
         DeclareLaunchArgument("red_creep_speed_mps", default_value="0.8"),
@@ -323,6 +376,7 @@ def generate_launch_description():
         DeclareLaunchArgument("yellow_pass_time_s", default_value="1.0"),
         DeclareLaunchArgument("stopped_vehicle_speed_mps", default_value="0.4"),
         DeclareLaunchArgument("stopped_vehicle_stop_distance_m", default_value="12.0"),
+        DeclareLaunchArgument("red_approach_hard_stop_distance_m", default_value="2.0"),
         DeclareLaunchArgument("mission_geojson", default_value=str(default_mission_geojson)),
         DeclareLaunchArgument("target_reached_distance_m", default_value="4.0"),
         DeclareLaunchArgument("mission_position_tolerance_m", default_value="2.0"),
@@ -330,7 +384,19 @@ def generate_launch_description():
         DeclareLaunchArgument("front_bumper_offset_m", default_value="2.0"),
         DeclareLaunchArgument("task_stop_position_tolerance_m", default_value="1.0"),
         DeclareLaunchArgument("task_stop_front_tolerance_m", default_value="1.0"),
-        DeclareLaunchArgument("task_stop_yaw_tolerance_deg", default_value="12.0"),
+        DeclareLaunchArgument("task_stop_yaw_tolerance_deg", default_value="16.0"),
+        DeclareLaunchArgument("task_stop_close_enough_distance_m", default_value="0.5"),
+        DeclareLaunchArgument("task_stop_close_enough_ignore_yaw", default_value="true"),
+        DeclareLaunchArgument("task_stop_close_enough_max_yaw_error_deg", default_value="25.0"),
+        DeclareLaunchArgument("task_stop_completion_yaw_tolerance_deg", default_value="14.0"),
+        DeclareLaunchArgument("task_stop_completion_position_tolerance_m", default_value="0.75"),
+        DeclareLaunchArgument("task_stop_use_side_projection", default_value="false"),
+        DeclareLaunchArgument("task_stop_side_projection_lateral_m", default_value="2.2"),
+        DeclareLaunchArgument("task_stop_side_projection_forward_m", default_value="0.0"),
+        DeclareLaunchArgument("task_stop_side_projection_clamp_to_road", default_value="true"),
+        DeclareLaunchArgument("task_stop_raw_override_enabled", default_value="true"),
+        DeclareLaunchArgument("task_stop_min_road_edge_clearance_m", default_value="0.4"),
+        DeclareLaunchArgument("task_stop_max_side_projection_m", default_value="3.0"),
         DeclareLaunchArgument("task_pull_over_hold_requires_effective_stop", default_value="true"),
         DeclareLaunchArgument("pickup_hold_s", default_value="16.0"),
         DeclareLaunchArgument("dropoff_hold_s", default_value="16.0"),
@@ -423,6 +489,18 @@ def generate_launch_description():
                         "task_stop_position_tolerance_m": ParameterValue(task_stop_position_tolerance_m, value_type=float),
                         "task_stop_front_tolerance_m": ParameterValue(task_stop_front_tolerance_m, value_type=float),
                         "task_stop_yaw_tolerance_deg": ParameterValue(task_stop_yaw_tolerance_deg, value_type=float),
+                        "task_stop_close_enough_distance_m": ParameterValue(task_stop_close_enough_distance_m, value_type=float),
+                        "task_stop_close_enough_ignore_yaw": ParameterValue(task_stop_close_enough_ignore_yaw, value_type=bool),
+                        "task_stop_close_enough_max_yaw_error_deg": ParameterValue(task_stop_close_enough_max_yaw_error_deg, value_type=float),
+                        "task_stop_completion_yaw_tolerance_deg": ParameterValue(task_stop_completion_yaw_tolerance_deg, value_type=float),
+                        "task_stop_completion_position_tolerance_m": ParameterValue(task_stop_completion_position_tolerance_m, value_type=float),
+                        "task_stop_use_side_projection": ParameterValue(task_stop_use_side_projection, value_type=bool),
+                        "task_stop_side_projection_lateral_m": ParameterValue(task_stop_side_projection_lateral_m, value_type=float),
+                        "task_stop_side_projection_forward_m": ParameterValue(task_stop_side_projection_forward_m, value_type=float),
+                        "task_stop_side_projection_clamp_to_road": ParameterValue(task_stop_side_projection_clamp_to_road, value_type=bool),
+                        "task_stop_raw_override_enabled": ParameterValue(task_stop_raw_override_enabled, value_type=bool),
+                        "task_stop_min_road_edge_clearance_m": ParameterValue(task_stop_min_road_edge_clearance_m, value_type=float),
+                        "task_stop_max_side_projection_m": ParameterValue(task_stop_max_side_projection_m, value_type=float),
                         "task_pull_over_lateral_offset_m": ParameterValue(task_pull_over_lateral_offset_m, value_type=float),
                         "task_pull_over_hold_requires_effective_stop": ParameterValue(task_pull_over_hold_requires_effective_stop, value_type=bool),
                         "pickup_hold_s": ParameterValue(pickup_hold_s, value_type=float),
@@ -531,6 +609,10 @@ def generate_launch_description():
                         "red_detection_horizon_m": ParameterValue(red_detection_horizon_m, value_type=float),
                         "red_approach_distance_m": ParameterValue(red_approach_distance_m, value_type=float),
                         "red_stop_distance_m": ParameterValue(red_stop_distance_m, value_type=float),
+                        "red_stop_trigger_base_m": ParameterValue(red_stop_trigger_base_m, value_type=float),
+                        "red_stop_trigger_max_m": ParameterValue(red_stop_trigger_max_m, value_type=float),
+                        "red_stop_trigger_speed_gain_s": ParameterValue(red_stop_trigger_speed_gain_s, value_type=float),
+                        "red_stop_trigger_speed_buffer_m": ParameterValue(red_stop_trigger_speed_buffer_m, value_type=float),
                         "red_creep_distance_m": ParameterValue(red_creep_distance_m, value_type=float),
                         "red_approach_speed_mps": ParameterValue(red_approach_speed_mps, value_type=float),
                         "red_creep_speed_mps": ParameterValue(red_creep_speed_mps, value_type=float),
@@ -612,6 +694,21 @@ def generate_launch_description():
                         "task_pull_over_final_distance_m": ParameterValue(task_pull_over_final_distance_m, value_type=float),
                         "task_pull_over_lateral_offset_m": ParameterValue(task_pull_over_lateral_offset_m, value_type=float),
                         "task_stop_reached_distance_m": ParameterValue(task_stop_reached_distance_m, value_type=float),
+                        "task_stop_final_phase_latch_enabled": ParameterValue(task_stop_final_phase_latch_enabled, value_type=bool),
+                        "task_stop_final_latch_distance_m": ParameterValue(task_stop_final_latch_distance_m, value_type=float),
+                        "task_stop_overshoot_guard_distance_m": ParameterValue(task_stop_overshoot_guard_distance_m, value_type=float),
+                        "task_stop_overshoot_guard_speed_mps": ParameterValue(task_stop_overshoot_guard_speed_mps, value_type=float),
+                        "task_stop_alignment_enabled": ParameterValue(task_stop_alignment_enabled, value_type=bool),
+                        "task_stop_alignment_start_distance_m": ParameterValue(task_stop_alignment_start_distance_m, value_type=float),
+                        "task_stop_alignment_yaw_tolerance_deg": ParameterValue(task_stop_alignment_yaw_tolerance_deg, value_type=float),
+                        "task_stop_alignment_speed_mps": ParameterValue(task_stop_alignment_speed_mps, value_type=float),
+                        "task_stop_alignment_target_ahead_m": ParameterValue(task_stop_alignment_target_ahead_m, value_type=float),
+                        "task_stop_approach_cruise_speed_mps": ParameterValue(task_stop_approach_cruise_speed_mps, value_type=float),
+                        "task_stop_pre_align_speed_mps": ParameterValue(task_stop_pre_align_speed_mps, value_type=float),
+                        "task_stop_final_align_speed_mps": ParameterValue(task_stop_final_align_speed_mps, value_type=float),
+                        "task_stop_min_creep_speed_mps": ParameterValue(task_stop_min_creep_speed_mps, value_type=float),
+                        "task_stop_no_stop_before_final_distance_m": ParameterValue(task_stop_no_stop_before_final_distance_m, value_type=float),
+                        "task_stop_phase_hysteresis_m": ParameterValue(task_stop_phase_hysteresis_m, value_type=float),
                         "task_pull_over_approach_speed_mps": ParameterValue(task_pull_over_approach_speed_mps, value_type=float),
                         "task_pull_over_final_speed_mps": ParameterValue(task_pull_over_final_speed_mps, value_type=float),
                         "task_pull_over_crawl_speed_mps": ParameterValue(task_pull_over_crawl_speed_mps, value_type=float),
@@ -640,6 +737,10 @@ def generate_launch_description():
                         "min_speed_for_throttle_floor_mps": ParameterValue(min_speed_for_throttle_floor_mps, value_type=float),
                         "throttle_slew_limit": ParameterValue(throttle_slew_limit, value_type=float),
                         "integral_limit": ParameterValue(integral_limit, value_type=float),
+                        "red_approach_hard_stop_distance_m": ParameterValue(
+                            red_approach_hard_stop_distance_m,
+                            value_type=float,
+                        ),
                     }],
                 ),
                 Node(

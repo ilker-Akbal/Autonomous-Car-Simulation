@@ -68,6 +68,21 @@ class LaneFollower(Node):
         self.declare_parameter("task_pull_over_final_speed_mps", 1.2)
         self.declare_parameter("task_pull_over_crawl_speed_mps", 0.6)
         self.declare_parameter("task_pull_over_keep_bias_until_reached", True)
+        self.declare_parameter("task_stop_final_phase_latch_enabled", True)
+        self.declare_parameter("task_stop_final_latch_distance_m", 1.0)
+        self.declare_parameter("task_stop_overshoot_guard_distance_m", 0.75)
+        self.declare_parameter("task_stop_overshoot_guard_speed_mps", 0.0)
+        self.declare_parameter("task_stop_alignment_enabled", True)
+        self.declare_parameter("task_stop_alignment_start_distance_m", 3.0)
+        self.declare_parameter("task_stop_alignment_yaw_tolerance_deg", 12.0)
+        self.declare_parameter("task_stop_alignment_speed_mps", 0.8)
+        self.declare_parameter("task_stop_alignment_target_ahead_m", 2.0)
+        self.declare_parameter("task_stop_approach_cruise_speed_mps", 2.0)
+        self.declare_parameter("task_stop_pre_align_speed_mps", 1.2)
+        self.declare_parameter("task_stop_final_align_speed_mps", 0.8)
+        self.declare_parameter("task_stop_min_creep_speed_mps", 0.6)
+        self.declare_parameter("task_stop_no_stop_before_final_distance_m", 1.0)
+        self.declare_parameter("task_stop_phase_hysteresis_m", 0.75)
         self.declare_parameter("rate_hz", 20.0)
 
         self.base_lookahead_m = float(self.get_parameter("base_lookahead_m").value)
@@ -166,6 +181,51 @@ class LaneFollower(Node):
         self.task_pull_over_keep_bias_until_reached = bool(
             self.get_parameter("task_pull_over_keep_bias_until_reached").value
         )
+        self.task_stop_final_phase_latch_enabled = bool(
+            self.get_parameter("task_stop_final_phase_latch_enabled").value
+        )
+        self.task_stop_final_latch_distance_m = float(
+            self.get_parameter("task_stop_final_latch_distance_m").value
+        )
+        self.task_stop_overshoot_guard_distance_m = float(
+            self.get_parameter("task_stop_overshoot_guard_distance_m").value
+        )
+        self.task_stop_overshoot_guard_speed_mps = float(
+            self.get_parameter("task_stop_overshoot_guard_speed_mps").value
+        )
+        self.task_stop_alignment_enabled = bool(
+            self.get_parameter("task_stop_alignment_enabled").value
+        )
+        self.task_stop_alignment_start_distance_m = float(
+            self.get_parameter("task_stop_alignment_start_distance_m").value
+        )
+        self.task_stop_alignment_yaw_tolerance_deg = float(
+            self.get_parameter("task_stop_alignment_yaw_tolerance_deg").value
+        )
+        self.task_stop_alignment_speed_mps = float(
+            self.get_parameter("task_stop_alignment_speed_mps").value
+        )
+        self.task_stop_alignment_target_ahead_m = float(
+            self.get_parameter("task_stop_alignment_target_ahead_m").value
+        )
+        self.task_stop_approach_cruise_speed_mps = float(
+            self.get_parameter("task_stop_approach_cruise_speed_mps").value
+        )
+        self.task_stop_pre_align_speed_mps = float(
+            self.get_parameter("task_stop_pre_align_speed_mps").value
+        )
+        self.task_stop_final_align_speed_mps = float(
+            self.get_parameter("task_stop_final_align_speed_mps").value
+        )
+        self.task_stop_min_creep_speed_mps = float(
+            self.get_parameter("task_stop_min_creep_speed_mps").value
+        )
+        self.task_stop_no_stop_before_final_distance_m = float(
+            self.get_parameter("task_stop_no_stop_before_final_distance_m").value
+        )
+        self.task_stop_phase_hysteresis_m = float(
+            self.get_parameter("task_stop_phase_hysteresis_m").value
+        )
         self.task_pose_approach_start_distance_m = min(
             self.task_pull_over_start_distance_m,
             10.0,
@@ -190,6 +250,9 @@ class LaneFollower(Node):
         self.last_nearest_index = None
         self.last_steer_cmd = 0.0
         self._last_logged_route_event = None
+        self._final_task_stop_latch_active = False
+        self._final_task_stop_latch_key: Optional[tuple[Any, Any, Any]] = None
+        self._final_task_stop_latch_reason: Optional[str] = None
         self.runtime_logger = RuntimeJsonlLogger(
             node_name="lane_follower",
             file_name="lane_follower.jsonl",
@@ -243,6 +306,20 @@ class LaneFollower(Node):
     def _lane_cte_cb(self, msg: Float32):
         self.last_lane_cte = float(msg.data)
         self.last_lane_cte_time = time.time()
+
+    def _mission_goal_latch_key(self) -> Optional[tuple[Any, Any, Any]]:
+        if self.mission_goal is None:
+            return None
+        return (
+            self.mission_goal.get("goal_name"),
+            self.mission_goal.get("goal_kind"),
+            self.mission_goal.get("goal_index"),
+        )
+
+    def _reset_final_task_stop_latch(self) -> None:
+        self._final_task_stop_latch_active = False
+        self._final_task_stop_latch_key = None
+        self._final_task_stop_latch_reason = None
 
     def _route_only_debug_defaults(self) -> dict[str, Any]:
         return {
@@ -298,6 +375,7 @@ class LaneFollower(Node):
             "route_conflict_with_lane_detection": False,
             "target_speed_raw_mps": None,
             "target_speed_final_mps": None,
+            "target_speed_final": None,
             "zero_speed_reason": None,
             "junction_locked": False,
             "junction_exit_recovery_active": False,
@@ -325,18 +403,63 @@ class LaneFollower(Node):
             "task_stop_distance_source": None,
             "task_stop_reached": False,
             "task_stop_reached_by_mission": False,
+            "task_stop_reached_reason": None,
+            "task_stop_yaw_tolerance_deg": None,
+            "task_stop_completion_yaw_tolerance_deg": None,
+            "task_stop_completion_position_tolerance_m": None,
+            "task_stop_completion_yaw_ok": None,
+            "task_stop_completion_position_ok": False,
+            "task_stop_close_enough_distance_m": None,
+            "task_stop_close_enough_reached": False,
             "yaw_error_deg": None,
             "task_stop_yaw_error_deg": None,
             "task_stop_yaw_within_tolerance": None,
+            "final_task_stop_latch_enabled": self.task_stop_final_phase_latch_enabled,
+            "final_task_stop_latch_active": False,
+            "final_task_stop_latch_reason": None,
+            "task_stop_final_latch_distance_m": self.task_stop_final_latch_distance_m,
+            "task_stop_overshoot_guard_distance_m": self.task_stop_overshoot_guard_distance_m,
+            "task_stop_overshoot_guard_speed_mps": self.task_stop_overshoot_guard_speed_mps,
+            "task_stop_overshoot_guard_active": False,
+            "task_stop_alignment_active": False,
+            "task_stop_alignment_reason": None,
+            "task_stop_alignment_target_x": None,
+            "task_stop_alignment_target_y": None,
+            "task_stop_alignment_enabled": self.task_stop_alignment_enabled,
+            "task_stop_alignment_start_distance_m": self.task_stop_alignment_start_distance_m,
+            "task_stop_alignment_yaw_tolerance_deg": self.task_stop_alignment_yaw_tolerance_deg,
+            "task_stop_alignment_speed_mps": self.task_stop_alignment_speed_mps,
+            "task_stop_alignment_target_ahead_m": self.task_stop_alignment_target_ahead_m,
+            "task_stop_approach_speed_phase": None,
+            "task_stop_approach_speed_mps": None,
+            "task_stop_approach_cruise_speed_mps": self.task_stop_approach_cruise_speed_mps,
+            "task_stop_pre_align_speed_mps": self.task_stop_pre_align_speed_mps,
+            "task_stop_final_align_speed_mps": self.task_stop_final_align_speed_mps,
+            "task_stop_min_creep_speed_mps": self.task_stop_min_creep_speed_mps,
+            "task_stop_no_stop_before_final_distance_m": self.task_stop_no_stop_before_final_distance_m,
+            "task_stop_phase_hysteresis_m": self.task_stop_phase_hysteresis_m,
+            "task_stop_phase_hysteresis_active": False,
+            "task_stop_safety_hold_active": False,
+            "task_stop_safety_hold_reason": None,
             "task_hold_active": False,
             "task_hold_remaining_s": None,
             "base_goal_x": None,
             "base_goal_y": None,
             "base_goal_yaw": None,
+            "raw_task_stop_x": None,
+            "raw_task_stop_y": None,
             "effective_task_stop_x": None,
             "effective_task_stop_y": None,
             "effective_task_stop_yaw": None,
             "effective_task_stop_source": None,
+            "task_stop_projection_enabled": False,
+            "task_stop_projection_reason": None,
+            "task_stop_projection_lateral_m": None,
+            "task_stop_projection_forward_m": None,
+            "task_stop_on_road": None,
+            "task_stop_road_id": None,
+            "task_stop_lane_id": None,
+            "distance_to_road_edge_m": None,
             "task_pose_approach_start_distance_m": self.task_pose_approach_start_distance_m,
             "task_pose_pre_stop_distance_m": self.task_pose_pre_stop_distance_m,
         }
@@ -705,22 +828,68 @@ class LaneFollower(Node):
             "task_stop_distance_source": "route_distance_to_goal",
             "task_stop_reached": False,
             "task_stop_reached_by_mission": False,
+            "task_stop_reached_reason": None,
+            "task_stop_yaw_tolerance_deg": None,
+            "task_stop_completion_yaw_tolerance_deg": None,
+            "task_stop_completion_position_tolerance_m": None,
+            "task_stop_completion_yaw_ok": None,
+            "task_stop_completion_position_ok": False,
+            "task_stop_close_enough_distance_m": None,
+            "task_stop_close_enough_reached": False,
             "yaw_error_deg": None,
             "task_stop_yaw_error_deg": None,
             "task_stop_yaw_within_tolerance": None,
+            "final_task_stop_latch_enabled": self.task_stop_final_phase_latch_enabled,
+            "final_task_stop_latch_active": False,
+            "final_task_stop_latch_reason": None,
+            "task_stop_final_latch_distance_m": self.task_stop_final_latch_distance_m,
+            "task_stop_overshoot_guard_distance_m": self.task_stop_overshoot_guard_distance_m,
+            "task_stop_overshoot_guard_speed_mps": self.task_stop_overshoot_guard_speed_mps,
+            "task_stop_overshoot_guard_active": False,
+            "task_stop_alignment_active": False,
+            "task_stop_alignment_reason": None,
+            "task_stop_alignment_target_x": None,
+            "task_stop_alignment_target_y": None,
+            "task_stop_alignment_enabled": self.task_stop_alignment_enabled,
+            "task_stop_alignment_start_distance_m": self.task_stop_alignment_start_distance_m,
+            "task_stop_alignment_yaw_tolerance_deg": self.task_stop_alignment_yaw_tolerance_deg,
+            "task_stop_alignment_speed_mps": self.task_stop_alignment_speed_mps,
+            "task_stop_alignment_target_ahead_m": self.task_stop_alignment_target_ahead_m,
+            "task_stop_approach_speed_phase": None,
+            "task_stop_approach_speed_mps": None,
+            "task_stop_approach_cruise_speed_mps": self.task_stop_approach_cruise_speed_mps,
+            "task_stop_pre_align_speed_mps": self.task_stop_pre_align_speed_mps,
+            "task_stop_final_align_speed_mps": self.task_stop_final_align_speed_mps,
+            "task_stop_min_creep_speed_mps": self.task_stop_min_creep_speed_mps,
+            "task_stop_no_stop_before_final_distance_m": self.task_stop_no_stop_before_final_distance_m,
+            "task_stop_phase_hysteresis_m": self.task_stop_phase_hysteresis_m,
+            "task_stop_phase_hysteresis_active": False,
+            "task_stop_safety_hold_active": False,
+            "task_stop_safety_hold_reason": None,
             "task_hold_active": False,
             "task_hold_remaining_s": None,
             "base_goal_x": None,
             "base_goal_y": None,
             "base_goal_yaw": None,
+            "raw_task_stop_x": None,
+            "raw_task_stop_y": None,
             "effective_task_stop_x": None,
             "effective_task_stop_y": None,
             "effective_task_stop_yaw": None,
             "effective_task_stop_source": None,
+            "task_stop_projection_enabled": False,
+            "task_stop_projection_reason": None,
+            "task_stop_projection_lateral_m": None,
+            "task_stop_projection_forward_m": None,
+            "task_stop_on_road": None,
+            "task_stop_road_id": None,
+            "task_stop_lane_id": None,
+            "distance_to_road_edge_m": None,
             "task_pose_approach_start_distance_m": self.task_pose_approach_start_distance_m,
             "task_pose_pre_stop_distance_m": self.task_pose_pre_stop_distance_m,
         }
         if self.mission_goal is None or time.time() - self.last_mission_goal_time > 2.0:
+            self._reset_final_task_stop_latch()
             return raw_target, debug
         goal_kind = str(self.mission_goal.get("goal_kind", ""))
         task_required = bool(self.mission_goal.get("task_stop_required", False))
@@ -743,12 +912,50 @@ class LaneFollower(Node):
         debug["yaw_error_deg"] = task_stop_yaw_error
         debug["task_stop_yaw_error_deg"] = task_stop_yaw_error
         debug["task_stop_yaw_within_tolerance"] = task_stop_yaw_within_tolerance
+        debug["task_stop_yaw_tolerance_deg"] = self.mission_goal.get(
+            "task_stop_yaw_tolerance_deg"
+        )
+        debug["task_stop_completion_yaw_tolerance_deg"] = self.mission_goal.get(
+            "task_stop_completion_yaw_tolerance_deg"
+        )
+        debug["task_stop_completion_position_tolerance_m"] = self.mission_goal.get(
+            "task_stop_completion_position_tolerance_m"
+        )
+        debug["task_stop_completion_yaw_ok"] = self.mission_goal.get(
+            "task_stop_completion_yaw_ok"
+        )
+        debug["task_stop_completion_position_ok"] = bool(
+            self.mission_goal.get("task_stop_completion_position_ok", False)
+        )
+        debug["task_stop_close_enough_distance_m"] = self.mission_goal.get(
+            "task_stop_close_enough_distance_m"
+        )
+        debug["task_stop_close_enough_reached"] = bool(
+            self.mission_goal.get("task_stop_close_enough_reached", False)
+        )
+        debug["task_stop_safety_hold_active"] = bool(
+            self.mission_goal.get("task_stop_safety_hold_active", False)
+        )
+        debug["task_stop_safety_hold_reason"] = self.mission_goal.get(
+            "task_stop_safety_hold_reason"
+        )
+        debug["task_stop_reached_reason"] = self.mission_goal.get(
+            "task_stop_reached_reason"
+        )
         if goal_kind not in ("pickup", "dropoff") or not task_required:
+            self._reset_final_task_stop_latch()
             return raw_target, debug
+
+        latch_key = self._mission_goal_latch_key()
+        if latch_key != self._final_task_stop_latch_key:
+            self._reset_final_task_stop_latch()
+            self._final_task_stop_latch_key = latch_key
 
         base_goal_x = self.mission_goal.get("base_goal_x", self.mission_goal.get("target_x"))
         base_goal_y = self.mission_goal.get("base_goal_y", self.mission_goal.get("target_y"))
         base_goal_yaw = self.mission_goal.get("base_goal_yaw", self.mission_goal.get("target_yaw"))
+        raw_task_stop_x = self.mission_goal.get("raw_task_stop_x")
+        raw_task_stop_y = self.mission_goal.get("raw_task_stop_y")
         effective_x = self.mission_goal.get("effective_task_stop_x")
         effective_y = self.mission_goal.get("effective_task_stop_y")
         effective_yaw = self.mission_goal.get("effective_task_stop_yaw")
@@ -764,14 +971,39 @@ class LaneFollower(Node):
                 "base_goal_x": base_goal_x,
                 "base_goal_y": base_goal_y,
                 "base_goal_yaw": base_goal_yaw,
+                "raw_task_stop_x": raw_task_stop_x,
+                "raw_task_stop_y": raw_task_stop_y,
                 "effective_task_stop_x": effective_x,
                 "effective_task_stop_y": effective_y,
                 "effective_task_stop_yaw": effective_yaw,
                 "effective_task_stop_source": effective_source,
+                "task_stop_projection_enabled": bool(
+                    self.mission_goal.get("task_stop_projection_enabled", False)
+                ),
+                "task_stop_projection_reason": self.mission_goal.get(
+                    "task_stop_projection_reason"
+                ),
+                "task_stop_projection_lateral_m": self.mission_goal.get(
+                    "task_stop_projection_lateral_m"
+                ),
+                "task_stop_projection_forward_m": self.mission_goal.get(
+                    "task_stop_projection_forward_m"
+                ),
+                "task_stop_side": self.mission_goal.get("task_stop_side"),
+                "task_stop_side_lateral_m": self.mission_goal.get(
+                    "task_stop_side_lateral_m"
+                ),
+                "task_stop_on_road": self.mission_goal.get("task_stop_on_road"),
+                "task_stop_road_id": self.mission_goal.get("task_stop_road_id"),
+                "task_stop_lane_id": self.mission_goal.get("task_stop_lane_id"),
+                "distance_to_road_edge_m": self.mission_goal.get(
+                    "distance_to_road_edge_m"
+                ),
                 "task_stop_reached_by_mission": task_reached_by_mission,
             }
         )
         if task_stop_x is None or task_stop_y is None:
+            self._reset_final_task_stop_latch()
             return raw_target, debug
         effective_center_distance = self.mission_goal.get("center_distance_to_effective_task_stop_m")
         effective_front_distance = self.mission_goal.get("front_bumper_distance_to_effective_task_stop_m")
@@ -800,6 +1032,8 @@ class LaneFollower(Node):
         pre_stop_x = pull_x
         pre_stop_y = pull_y
         pre_stop_yaw = task_stop_yaw
+        forward_x = None
+        forward_y = None
         if task_stop_yaw is not None:
             yaw_rad = math.radians(float(task_stop_yaw))
             forward_x = math.cos(yaw_rad)
@@ -817,8 +1051,67 @@ class LaneFollower(Node):
         if distance_to_goal_m > self.task_pose_approach_start_distance_m and not hold_active:
             return raw_target, debug
 
+        if self.task_stop_final_phase_latch_enabled and not hold_active:
+            should_enter_final_phase = distance_to_goal_m <= self.task_pull_over_final_distance_m
+            should_lock_near_stop = distance_to_goal_m <= self.task_stop_final_latch_distance_m
+            if should_enter_final_phase or self._final_task_stop_latch_active:
+                self._final_task_stop_latch_active = True
+                self._final_task_stop_latch_key = latch_key
+                if should_lock_near_stop:
+                    self._final_task_stop_latch_reason = "within_final_latch_distance"
+                elif self._final_task_stop_latch_reason is None:
+                    self._final_task_stop_latch_reason = "final_phase_entered"
+
+        yaw_error_for_alignment = None
+        if task_stop_yaw_error is not None:
+            try:
+                yaw_error_for_alignment = float(task_stop_yaw_error)
+            except Exception:
+                yaw_error_for_alignment = None
+        completion_yaw_ok = debug.get("task_stop_completion_yaw_ok")
+        completion_position_ok = bool(debug.get("task_stop_completion_position_ok", False))
+        local_safety_hold_active = (
+            not hold_active
+            and not task_reached_by_mission
+            and distance_to_goal_m <= self.task_stop_overshoot_guard_distance_m
+            and (
+                completion_yaw_ok is False
+                or not completion_position_ok
+            )
+        )
+        if local_safety_hold_active:
+            debug["task_stop_safety_hold_active"] = True
+            debug["task_stop_safety_hold_reason"] = (
+                "safety_hold_yaw_not_aligned"
+                if completion_yaw_ok is False
+                else "safety_hold_position_not_complete"
+            )
+        alignment_active = (
+            self.task_stop_alignment_enabled
+            and not hold_active
+            and not local_safety_hold_active
+            and forward_x is not None
+            and forward_y is not None
+            and yaw_error_for_alignment is not None
+            and distance_to_goal_m <= self.task_stop_alignment_start_distance_m
+            and yaw_error_for_alignment > self.task_stop_alignment_yaw_tolerance_deg
+        )
+        alignment_target_x = None
+        alignment_target_y = None
+        if alignment_active:
+            alignment_target_x = pull_x + forward_x * self.task_stop_alignment_target_ahead_m
+            alignment_target_y = pull_y + forward_y * self.task_stop_alignment_target_ahead_m
+
         if hold_active:
             phase = f"{goal_kind}_hold"
+            target_x = pull_x
+            target_y = pull_y
+        elif alignment_active:
+            phase = "final_task_stop"
+            target_x = alignment_target_x
+            target_y = alignment_target_y
+        elif self._final_task_stop_latch_active:
+            phase = "final_task_stop"
             target_x = pull_x
             target_y = pull_y
         elif distance_to_goal_m > self.task_pull_over_final_distance_m and task_stop_yaw is not None:
@@ -835,6 +1128,21 @@ class LaneFollower(Node):
         target["y"] = float(target_y)
         if task_stop_yaw is not None:
             target["yaw"] = float(task_stop_yaw)
+        overshoot_guard_active = (
+            self._final_task_stop_latch_active
+            and distance_to_goal_m <= self.task_stop_overshoot_guard_distance_m
+        )
+        if local_safety_hold_active:
+            overshoot_guard_active = True
+        final_latch_reason = (
+            "mission_hold_active"
+            if hold_active
+            else self._final_task_stop_latch_reason
+        )
+        if local_safety_hold_active:
+            final_latch_reason = debug.get("task_stop_safety_hold_reason")
+        elif overshoot_guard_active:
+            final_latch_reason = "final_stop_latch_hold"
         debug.update(
             {
                 "task_pull_over_mode": True,
@@ -843,6 +1151,30 @@ class LaneFollower(Node):
                 "task_pull_over_target_y": round(float(pull_y), 3),
                 "task_pull_over_blended_target_x": round(float(target["x"]), 3),
                 "task_pull_over_blended_target_y": round(float(target["y"]), 3),
+                "final_task_stop_latch_enabled": self.task_stop_final_phase_latch_enabled,
+                "final_task_stop_latch_active": self._final_task_stop_latch_active,
+                "final_task_stop_latch_reason": final_latch_reason,
+                "task_stop_final_latch_distance_m": self.task_stop_final_latch_distance_m,
+                "task_stop_overshoot_guard_distance_m": self.task_stop_overshoot_guard_distance_m,
+                "task_stop_overshoot_guard_speed_mps": self.task_stop_overshoot_guard_speed_mps,
+                "task_stop_overshoot_guard_active": overshoot_guard_active,
+                "task_stop_alignment_active": alignment_active,
+                "task_stop_alignment_reason": (
+                    "yaw_error_above_alignment_tolerance"
+                    if alignment_active
+                    else None
+                ),
+                "task_stop_alignment_target_x": (
+                    round(float(alignment_target_x), 3)
+                    if alignment_target_x is not None
+                    else None
+                ),
+                "task_stop_alignment_target_y": (
+                    round(float(alignment_target_y), 3)
+                    if alignment_target_y is not None
+                    else None
+                ),
+                "task_stop_phase_hysteresis_active": self._final_task_stop_latch_active,
             }
         )
         return target, debug
@@ -1265,7 +1597,6 @@ class LaneFollower(Node):
         if task_debug["task_pull_over_mode"]:
             task_distance = task_debug.get("task_stop_distance_m")
             task_pose_phase = str(task_debug.get("task_pose_phase", "route_lane"))
-            yaw_within_tolerance = task_debug.get("task_stop_yaw_within_tolerance")
             if task_debug.get("task_stop_reached") or task_debug.get("task_hold_active"):
                 target_speed = 0.0
                 target_speed_after_route_events = 0.0
@@ -1275,35 +1606,76 @@ class LaneFollower(Node):
                     if self.mission_goal is not None and task_debug.get("task_hold_active")
                     else "task_stop"
                 )
-            elif task_distance is not None and float(task_distance) <= self.task_pull_over_final_distance_m:
-                final_cap = self.task_pull_over_final_speed_mps
-                if float(task_distance) <= self.task_stop_reached_distance_m:
-                    final_cap = min(final_cap, self.task_pull_over_crawl_speed_mps)
-                target_speed = min(target_speed, final_cap)
+                task_debug["task_stop_approach_speed_phase"] = "hold"
+                task_debug["task_stop_approach_speed_mps"] = 0.0
+            elif task_debug.get("task_stop_safety_hold_active"):
+                guard_speed = max(0.0, self.task_stop_overshoot_guard_speed_mps)
+                target_speed = min(target_speed, guard_speed)
                 target_speed_after_route_events = min(
                     target_speed_after_route_events,
-                    final_cap,
+                    guard_speed,
                 )
-                if (
-                    yaw_within_tolerance is False
-                    and final_cap <= self.task_pull_over_crawl_speed_mps + 1e-6
-                ):
-                    speed_reason = f"{speed_reason}+task_pose_align"
-                    profile["speed_context"] = "task_pose_align"
-                elif final_cap <= self.task_pull_over_crawl_speed_mps + 1e-6:
-                    speed_reason = f"{speed_reason}+task_pull_over_crawl"
-                    profile["speed_context"] = "task_pull_over_crawl"
-                elif task_pose_phase == "final_task_stop":
-                    speed_reason = f"{speed_reason}+final_task_stop"
-                    profile["speed_context"] = "final_task_stop"
-                else:
-                    speed_reason = f"{speed_reason}+task_pull_over_final"
-                    profile["speed_context"] = "task_pull_over_final"
-            else:
-                target_speed = min(target_speed, self.task_pull_over_approach_speed_mps)
+                safety_reason = task_debug.get("task_stop_safety_hold_reason") or "safety_hold"
+                speed_reason = f"{speed_reason}+{safety_reason}"
+                profile["speed_context"] = "task_stop_safety_hold"
+                task_debug["task_stop_approach_speed_phase"] = "safety_hold"
+                task_debug["task_stop_approach_speed_mps"] = guard_speed
+            elif task_debug.get("task_stop_overshoot_guard_active"):
+                guard_speed = max(0.0, self.task_stop_overshoot_guard_speed_mps)
+                target_speed = min(target_speed, guard_speed)
                 target_speed_after_route_events = min(
                     target_speed_after_route_events,
-                    self.task_pull_over_approach_speed_mps,
+                    guard_speed,
+                )
+                speed_reason = f"{speed_reason}+final_stop_latch_hold"
+                profile["speed_context"] = "final_stop_latch_hold"
+                task_debug["task_stop_approach_speed_phase"] = "final_stop_latch_hold"
+                task_debug["task_stop_approach_speed_mps"] = guard_speed
+            elif task_distance is not None and float(task_distance) <= self.task_pull_over_final_distance_m:
+                task_distance_f = float(task_distance)
+                if task_debug.get("task_stop_alignment_active"):
+                    phase_cap = self.task_stop_alignment_speed_mps
+                    approach_phase = "alignment"
+                    speed_context = "task_stop_alignment"
+                    speed_suffix = "task_stop_alignment"
+                elif task_distance_f <= self.task_stop_no_stop_before_final_distance_m:
+                    phase_cap = self.task_stop_min_creep_speed_mps
+                    approach_phase = "final_creep"
+                    speed_context = "task_stop_final_creep"
+                    speed_suffix = "task_stop_final_creep"
+                elif task_distance_f <= self.task_stop_alignment_start_distance_m:
+                    phase_cap = self.task_stop_final_align_speed_mps
+                    approach_phase = "final_align"
+                    speed_context = "task_stop_final_align"
+                    speed_suffix = "task_stop_final_align"
+                else:
+                    phase_cap = self.task_stop_pre_align_speed_mps
+                    approach_phase = "pre_align"
+                    speed_context = (
+                        "final_task_stop"
+                        if task_pose_phase == "final_task_stop"
+                        else "pre_stop_align"
+                    )
+                    speed_suffix = (
+                        "final_task_stop"
+                        if task_pose_phase == "final_task_stop"
+                        else "pre_stop_align"
+                    )
+                target_speed = min(target_speed, phase_cap)
+                target_speed_after_route_events = min(
+                    target_speed_after_route_events,
+                    phase_cap,
+                )
+                speed_reason = f"{speed_reason}+{speed_suffix}"
+                profile["speed_context"] = speed_context
+                task_debug["task_stop_approach_speed_phase"] = approach_phase
+                task_debug["task_stop_approach_speed_mps"] = phase_cap
+            else:
+                approach_cap = self.task_stop_approach_cruise_speed_mps
+                target_speed = min(target_speed, approach_cap)
+                target_speed_after_route_events = min(
+                    target_speed_after_route_events,
+                    approach_cap,
                 )
                 if task_pose_phase == "pre_stop_align":
                     speed_reason = f"{speed_reason}+pre_stop_align"
@@ -1311,6 +1683,8 @@ class LaneFollower(Node):
                 else:
                     speed_reason = f"{speed_reason}+task_pull_over"
                     profile["speed_context"] = "task_pull_over"
+                task_debug["task_stop_approach_speed_phase"] = "approach_cruise"
+                task_debug["task_stop_approach_speed_mps"] = approach_cap
             self.last_target_speed = min(self.last_target_speed, target_speed_after_route_events)
 
         raw_target_for_bias = dict(target)
@@ -1446,6 +1820,12 @@ class LaneFollower(Node):
             zero_speed_reason = str(task_debug.get("task_pose_phase") or "task_hold")
         elif task_stop_reached or task_reached_by_mission:
             zero_speed_reason = "task_stop_reached"
+        elif task_debug.get("task_stop_safety_hold_active"):
+            zero_speed_reason = (
+                str(task_debug.get("task_stop_safety_hold_reason"))
+                if task_debug.get("task_stop_safety_hold_reason") is not None
+                else "task_stop_safety_hold"
+            )
         elif route_event_zero_reason is not None:
             zero_speed_reason = route_event_zero_reason
 
@@ -1513,6 +1893,7 @@ class LaneFollower(Node):
         route_only_debug["junction_exit_recovery_active"] = junction_exit_recovery_active
         route_only_debug["target_speed_raw_mps"] = round(target_speed_before_route_events, 3)
         route_only_debug["target_speed_final_mps"] = round(self.last_target_speed, 3)
+        route_only_debug["target_speed_final"] = round(self.last_target_speed, 3)
         route_only_debug["zero_speed_reason"] = zero_speed_reason
         route_only_debug["current_speed_mps"] = round(speed, 3)
         route_only_debug["traffic_light_distance_m"] = (
