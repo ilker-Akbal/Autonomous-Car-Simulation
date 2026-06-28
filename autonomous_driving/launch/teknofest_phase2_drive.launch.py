@@ -30,6 +30,18 @@ def generate_launch_description():
     camera_width = LaunchConfiguration("camera_width")
     camera_height = LaunchConfiguration("camera_height")
     camera_sensor_tick = LaunchConfiguration("camera_sensor_tick")
+    enable_viewport_camera_follow = LaunchConfiguration("enable_viewport_camera_follow")
+    viewport_camera_follow_distance_m = LaunchConfiguration("follow_distance_m")
+    viewport_camera_follow_height_m = LaunchConfiguration("follow_height_m")
+    viewport_camera_follow_pitch_deg = LaunchConfiguration("follow_pitch_deg")
+    viewport_camera_follow_update_hz = LaunchConfiguration("follow_update_hz")
+    viewport_camera_carla_host = LaunchConfiguration("carla_host")
+    viewport_camera_carla_port = LaunchConfiguration("carla_port")
+    enable_demo_weather = LaunchConfiguration("enable_demo_weather")
+    demo_weather_preset = LaunchConfiguration("demo_weather_preset")
+    enable_ego_lights = LaunchConfiguration("enable_ego_lights")
+    enable_ego_label = LaunchConfiguration("enable_ego_label")
+    ego_label_text = LaunchConfiguration("ego_label_text")
 
     enable_sync_mode = LaunchConfiguration("enable_sync_mode")
     auto_tick_sync_world = LaunchConfiguration("auto_tick_sync_world")
@@ -315,8 +327,20 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("host", default_value="127.0.0.1"),
         DeclareLaunchArgument("port", default_value="2000"),
+        DeclareLaunchArgument("carla_host", default_value="127.0.0.1"),
+        DeclareLaunchArgument("carla_port", default_value="2000"),
         DeclareLaunchArgument("town", default_value="Town03"),
         DeclareLaunchArgument("ego_role_name", default_value="ego_vehicle"),
+        DeclareLaunchArgument("enable_viewport_camera_follow", default_value="true"),
+        DeclareLaunchArgument("follow_distance_m", default_value="10.0"),
+        DeclareLaunchArgument("follow_height_m", default_value="5.0"),
+        DeclareLaunchArgument("follow_pitch_deg", default_value="-18.0"),
+        DeclareLaunchArgument("follow_update_hz", default_value="30.0"),
+        DeclareLaunchArgument("enable_demo_weather", default_value="true"),
+        DeclareLaunchArgument("demo_weather_preset", default_value="clear_sunset"),
+        DeclareLaunchArgument("enable_ego_lights", default_value="true"),
+        DeclareLaunchArgument("enable_ego_label", default_value="true"),
+        DeclareLaunchArgument("ego_label_text", default_value="ROTA TEKNOFEST"),
         DeclareLaunchArgument("route_horizon_m", default_value="80.0"),
         DeclareLaunchArgument("route_step_m", default_value="2.0"),
         DeclareLaunchArgument("local_route_horizon_m", default_value="80.0"),
@@ -443,6 +467,63 @@ def generate_launch_description():
                 "fixed_delta_seconds": ParameterValue(fixed_delta_seconds, value_type=float),
                 "tick_rate_hz": ParameterValue(tick_rate_hz, value_type=float),
             }],
+        ),
+
+        TimerAction(
+            period=6.0,
+            actions=[
+                Node(
+                    package="autonomous_driving",
+                    executable="viewport_camera_follow_node",
+                    name="viewport_camera_follow_node",
+                    output="screen",
+                    condition=IfCondition(enable_viewport_camera_follow),
+                    parameters=[{
+                        "carla_root": ParameterValue(carla_root, value_type=str),
+                        "carla_host": ParameterValue(viewport_camera_carla_host, value_type=str),
+                        "carla_port": ParameterValue(viewport_camera_carla_port, value_type=int),
+                        "ego_role_name": ParameterValue(ego_role_name, value_type=str),
+                        "camera_view": "chase",
+                        "follow_distance_m": ParameterValue(
+                            viewport_camera_follow_distance_m,
+                            value_type=float,
+                        ),
+                        "follow_height_m": ParameterValue(
+                            viewport_camera_follow_height_m,
+                            value_type=float,
+                        ),
+                        "follow_pitch_deg": ParameterValue(
+                            viewport_camera_follow_pitch_deg,
+                            value_type=float,
+                        ),
+                        "follow_update_hz": ParameterValue(
+                            viewport_camera_follow_update_hz,
+                            value_type=float,
+                        ),
+                        "enable_demo_weather": ParameterValue(
+                            enable_demo_weather,
+                            value_type=bool,
+                        ),
+                        "demo_weather_preset": ParameterValue(
+                            demo_weather_preset,
+                            value_type=str,
+                        ),
+                        "enable_ego_lights": ParameterValue(
+                            enable_ego_lights,
+                            value_type=bool,
+                        ),
+                        "enable_ego_label": ParameterValue(
+                            enable_ego_label,
+                            value_type=bool,
+                        ),
+                        "ego_label_text": ParameterValue(
+                            ego_label_text,
+                            value_type=str,
+                        ),
+                        "ego_retry_timeout_s": 60.0,
+                    }],
+                ),
+            ],
         ),
 
         TimerAction(
