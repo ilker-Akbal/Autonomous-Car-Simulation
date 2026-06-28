@@ -942,7 +942,7 @@ class LaneFollower(Node):
         debug["task_stop_reached_reason"] = self.mission_goal.get(
             "task_stop_reached_reason"
         )
-        if goal_kind not in ("pickup", "dropoff") or not task_required:
+        if goal_kind not in ("pickup", "dropoff", "park_entry") or not task_required:
             self._reset_final_task_stop_latch()
             return raw_target, debug
 
@@ -1048,7 +1048,18 @@ class LaneFollower(Node):
             }
         )
 
-        if distance_to_goal_m > self.task_pose_approach_start_distance_m and not hold_active:
+        approach_start_distance_m = self.task_pose_approach_start_distance_m
+        if goal_kind in ("dropoff", "park_entry"):
+            approach_start_distance_m = max(
+                approach_start_distance_m,
+                self.task_pull_over_start_distance_m,
+            )
+        debug["task_pose_approach_start_distance_m"] = round(
+            approach_start_distance_m,
+            3,
+        )
+
+        if distance_to_goal_m > approach_start_distance_m and not hold_active:
             return raw_target, debug
 
         if self.task_stop_final_phase_latch_enabled and not hold_active:

@@ -70,10 +70,10 @@
         "task_stop_mode": "pull_over_pose",
         "task_stop_source": "raw_editor_vehicle_pose",
         "task_stop_side": "right",
-        "task_stop_x": 235.372175,
-        "task_stop_y": -30.978161,
+        "task_stop_x": 229.2,
+        "task_stop_y": -27.3,
         "task_stop_z": 0.0,
-        "task_stop_yaw": 90.0001,
+        "task_stop_yaw": 90.0,
         "kind": "dropoff"
       },
       "geometry": {
@@ -98,6 +98,13 @@
         "road_id": 67,
         "lane_id": -2,
         "is_junction": false,
+        "task_stop_mode": "pull_over_pose",
+        "task_stop_source": "raw_editor_vehicle_pose",
+        "task_stop_side": "right",
+        "task_stop_x": 122.1,
+        "task_stop_y": 189.9,
+        "task_stop_z": 0.0,
+        "task_stop_yaw": 180.0,
         "kind": "park_entry"
       },
       "geometry": {

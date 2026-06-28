@@ -278,7 +278,7 @@ class MissionRouteManager(Node):
     def _is_pull_over_task(self, target: dict[str, Any]) -> bool:
         kind = str(target.get("kind", target.get("role", "")))
         mode = str(target.get("task_stop_mode", "pull_over_pose"))
-        return kind in ("pickup", "dropoff") and mode == "pull_over_pose"
+        return kind in ("pickup", "dropoff", "park_entry") and mode == "pull_over_pose"
 
     def _effective_task_stop_pose(self, target: dict[str, Any]) -> dict[str, Any]:
         base_x = target.get("carla_x", target.get("x"))
@@ -903,7 +903,7 @@ class MissionRouteManager(Node):
             }
 
         goal_kind = current_goal.get("kind")
-        task_stop_required = goal_kind in ("pickup", "dropoff")
+        task_stop_required = goal_kind in ("pickup", "dropoff", "park_entry")
         task_hold_s, _ = self._hold_duration_for_target(current_goal)
         distance_to_goal_m = mission_stop_state.get("distance_to_goal_m")
         task_stop_reached_by_mission = bool(
