@@ -40,9 +40,9 @@
         "task_stop_source": "raw_editor_vehicle_pose",
         "task_stop_side": "right",
         "task_stop_x": 115.6,
-        "task_stop_y": -10.2,
+        "task_stop_y": -10.35,
         "task_stop_z": 0.0,
-        "task_stop_yaw": 180.000198,
+        "task_stop_yaw": -179.144196,
         "kind": "pickup"
       },
       "geometry": {
