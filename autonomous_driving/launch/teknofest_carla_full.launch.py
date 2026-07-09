@@ -34,7 +34,7 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_pitch_deg", default_value="-12.0"),
 
         LogInfo(msg="Minimal CARLA sensor skeleton started"),
-        LogInfo(msg="Decision, route, control, traffic-light stop/go and WASD nodes are removed"),
+        LogInfo(msg="Decision, route, control and traffic-light stop/go nodes are removed"),
 
         Node(
             package="autonomous_driving",
